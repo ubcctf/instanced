@@ -30,6 +30,9 @@ func main() {
 			panic(err.Error())
 		}
 		fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
+		for _, p := range pods.Items {
+			fmt.Println(p.ObjectMeta.Name)
+		}
 
 		// Examples for error handling:
 		// - Use helper functions e.g. errors.IsNotFound()
