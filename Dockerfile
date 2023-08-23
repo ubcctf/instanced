@@ -14,7 +14,8 @@ RUN GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/app
 ############################
 FROM scratch
 # Copy ca-certs from builder since we need https
-# Copy static binary
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /go/bin/app /
+# Copy static binary
+COPY --from=builder  /go/bin/app
 # Run the binary.
 ENTRYPOINT ["/go/bin/app"]
