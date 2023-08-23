@@ -4,8 +4,12 @@ name: Build and Push to GCR
 
 on:
   workflow_dispatch:
-  release:
-    types: [published]
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
 
 env:
   PROJECT_ID: maplectf
