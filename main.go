@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/labstack/echo/v4"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -20,21 +22,32 @@ type Instancer struct {
 	echo         *echo.Echo
 	k8sConfig    *rest.Config
 	k8sClientSet *kubernetes.Clientset
+	config       *Config
+}
+
+type Config struct {
+	// map[name]manifest in yaml. supports multiple objects per file delimited with ---
+	Challenges map[string]string `json:"challenges"`
+	ListenAddr string            `json:"listenAddr"`
 }
 
 func main() {
 	instancer := Instancer{
 		echo: echo.New(),
 	}
-	registerEndpoints(instancer.echo)
+	instancer.registerEndpoints()
 	var err error
+	instancer.config, err = loadConfig()
+	if err != nil {
+		instancer.echo.Logger.Fatalf("error: %s", err)
+	}
 	instancer.k8sConfig, err = rest.InClusterConfig()
 	if err != nil {
 		instancer.echo.Logger.Fatalf("error creating k8s configuration: %s", err)
 	}
 	instancer.k8sClientSet, err = kubernetes.NewForConfig(instancer.k8sConfig)
 	if err != nil {
-		log.Fatalf("error initializing client: %s", err)
+		instancer.echo.Logger.Fatalf("error initializing client: %s", err)
 	}
 
 	go instancer.echo.Logger.Fatal(instancer.echo.Start(":8080"))
@@ -42,27 +55,74 @@ func main() {
 	select {}
 }
 
-func registerEndpoints(e *echo.Echo) {
-	e.GET("/health", func(c echo.Context) error {
-		return c.String(http.StatusOK, "Healthy")
+func loadConfig() (*Config, error) {
+	confb, err := os.ReadFile("/config/config.yaml")
+	if err != nil {
+		return nil, fmt.Errorf("when reading config file:\n\t%s", err)
+	}
+	conf := &Config{}
+	err = yaml.Unmarshal(confb, conf)
+	if err != nil {
+		return nil, fmt.Errorf("when parsing config file:\n\t%s", err)
+	}
+	return conf, nil
+}
+
+func (in *Instancer) registerEndpoints() {
+	in.echo.GET("/healthz", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, "healthy")
 	})
 
-	e.POST("/instances", func(c echo.Context) error {
-		// Get challenge name
-		// Check config for challenge
+	in.echo.POST("/instances", func(c echo.Context) error {
+		chalName := c.QueryParam("chal")
+		token := c.QueryParam("token")
 
-		return c.String(http.StatusAccepted, "Creating")
+		manifest, ok := in.config.Challenges[chalName]
+		if !ok {
+			return c.JSON(http.StatusNotFound, "challenge not supported")
+		}
+		// todo: check an auth token or something
+		if token == "" {
+			return c.JSON(http.StatusForbidden, "team token not provided")
+		}
+		// todo: create challenge
+		var err error
+		objs := parseK8sYaml(manifest)
+		for _, obj := range objs {
+			_, err = createObject(
+				in.k8sClientSet,
+				in.k8sConfig,
+				obj)
+			if err != nil {
+				break
+			}
+		}
+		if err != nil {
+			// todo: handle errors/cleanup incomplete deploys?
+			return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
+		}
+
+		return c.JSON(http.StatusAccepted, "created")
 	})
 
-	e.POST("/instances/[id]/destroy", func(c echo.Context) error {
-		return c.String(http.StatusAccepted, "Destroying")
+	in.echo.DELETE("/instances/:id", func(c echo.Context) error {
+		/*_, err = clientset.CoreV1().Pods("default").Get(context.TODO(), "example-xxxxx", metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			fmt.Printf("Pod example-xxxxx not found in default namespace\n")
+		} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
+			fmt.Printf("Error getting pod %v\n", statusError.ErrStatus.Message)
+		} else if err != nil {
+			return c.JSON(http.StatusInternalServerError, "deletion failed: contact admin")
+		} else {
+			fmt.Printf("Found example-xxxxx pod in default namespace\n")
+		}*/
+		return c.JSON(http.StatusAccepted, "destroyed")
 	})
 }
 
 // https://github.com/kubernetes/client-go/issues/193#issuecomment-363318588
-func parseK8sYaml(fileR []byte) []runtime.Object {
-	fileAsString := string(fileR[:])
-	sepYamlfiles := strings.Split(fileAsString, "---")
+func parseK8sYaml(manifest string) []runtime.Object {
+	sepYamlfiles := strings.Split(manifest, "---")
 	result := make([]runtime.Object, 0, len(sepYamlfiles))
 	for _, f := range sepYamlfiles {
 		if f == "\n" || f == "" {
@@ -73,7 +133,7 @@ func parseK8sYaml(fileR []byte) []runtime.Object {
 		decode := scheme.Codecs.UniversalDeserializer().Decode
 		obj, _, err := decode([]byte(f), nil, nil)
 		if err != nil {
-			log.Println(fmt.Sprintf("Error while decoding YAML object. Err was: %s", err))
+			log.Printf("Error while decoding YAML object. Err was: %s", err)
 			continue
 		}
 		result = append(result, obj)
@@ -104,7 +164,7 @@ func createObject(clientSet kubernetes.Interface, config *rest.Config, obj runti
 
 	// Use the REST helper to create the object in the "default" namespace.
 	restHelper := resource.NewHelper(restClient, mapping)
-	return restHelper.Create("default", false, obj)
+	return restHelper.Create("challenges", false, obj)
 }
 
 /*
@@ -133,16 +193,7 @@ func watchPods(log echo.Logger) {
 		// Examples for error handling:
 		// - Use helper functions e.g. errors.IsNotFound()
 		// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-		/* 		_, err = clientset.CoreV1().Pods("default").Get(context.TODO(), "example-xxxxx", metav1.GetOptions{})
-		   		if errors.IsNotFound(err) {
-		   			fmt.Printf("Pod example-xxxxx not found in default namespace\n")
-		   		} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-		   			fmt.Printf("Error getting pod %v\n", statusError.ErrStatus.Message)
-		   		} else if err != nil {
-		   			panic(err.Error())
-		   		} else {
-		   			fmt.Printf("Found example-xxxxx pod in default namespace\n")
-		   		}
+		/*
 
 
 		time.Sleep(20 * time.Second)
