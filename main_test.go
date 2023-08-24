@@ -4,7 +4,7 @@ import (
 	"log"
 )
 
-func ExampleParseYaml() {
+func ExampleUnmarshalSingleManifest() {
 	manifest := `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,7 +26,7 @@ spec:
         ports:
         - containerPort: 80
 `
-	obj, err := ParseK8sYaml(manifest)
+	obj, err := UnmarshalSingleManifest(manifest)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
