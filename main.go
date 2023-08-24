@@ -79,10 +79,13 @@ func (in *Instancer) registerEndpoints() {
 
 		manifest, ok := in.config.Challenges[chalName]
 		if !ok {
+			// todo: don't sprintf user controlled data
+			c.Logger().Infof("request rejected with invalid challenge %s", chalName)
 			return c.JSON(http.StatusNotFound, "challenge not supported")
 		}
 		// todo: check an auth token or something
 		if token == "" {
+			c.Logger().Info("request rejected with no token")
 			return c.JSON(http.StatusForbidden, "team token not provided")
 		}
 		// todo: create challenge
@@ -99,9 +102,10 @@ func (in *Instancer) registerEndpoints() {
 		}
 		if err != nil {
 			// todo: handle errors/cleanup incomplete deploys?
+			c.Logger().Errorf("could create an object: %s", err.Error())
 			return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
 		}
-
+		c.Logger().Info("provisioned new instance")
 		return c.JSON(http.StatusAccepted, "created")
 	})
 
