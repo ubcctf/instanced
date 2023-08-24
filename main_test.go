@@ -1,6 +1,8 @@
 package main
 
-import "log"
+import (
+	"log"
+)
 
 func ExampleParseYaml() {
 	manifest := `apiVersion: apps/v1
@@ -28,8 +30,6 @@ spec:
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	log.Println(obj.GetObjectKind().GroupVersionKind().Group)
-	log.Println(obj.GetObjectKind().GroupVersionKind().Version)
-	log.Println(obj.GetObjectKind().GroupVersionKind().Kind)
+	log.Println(obj.Object)
 	// Output:
 }

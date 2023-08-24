@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -35,6 +36,7 @@ func main() {
 	instancer := Instancer{
 		echo: echo.New(),
 	}
+	instancer.echo.Logger.SetLevel(log.DEBUG)
 	instancer.registerEndpoints()
 	var err error
 	instancer.config, err = loadConfig()
@@ -74,8 +76,12 @@ func (in *Instancer) CreateObject(manifest string) (*unstructured.Unstructured, 
 	if err != nil {
 		return nil, err
 	}
+	in.echo.Logger.Debug(unstructObj)
 
-	c := discovery.NewDiscoveryClientForConfigOrDie(in.k8sConfig)
+	c, err := discovery.NewDiscoveryClientForConfig(in.k8sConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	groupResources, err := restmapper.GetAPIGroupResources(c)
 	if err != nil {
@@ -90,7 +96,7 @@ func (in *Instancer) CreateObject(manifest string) (*unstructured.Unstructured, 
 	if err != nil {
 		return nil, err
 	}
-	resObj, err := client.Resource(mapping.Resource).Create(context.TODO(), unstructObj, metav1.CreateOptions{})
+	resObj, err := client.Resource(mapping.Resource).Namespace("challenges").Create(context.Background(), unstructObj, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -123,9 +129,16 @@ func (in *Instancer) registerEndpoints() {
 		}
 		// todo: create challenge
 		var err error
-		objYamls := SplitYaml(manifest)
+
+		objYamls := strings.Split(manifest, "---")
+		c.Logger().Infof("creating %d objects", len(objYamls))
 		for _, v := range objYamls {
+			if v == "\n" || v == "" {
+				// ignore empty cases
+				continue
+			}
 			resObj, err := in.CreateObject(v)
+			in.echo.Logger.Debug(resObj)
 			if err != nil {
 				break
 			}
