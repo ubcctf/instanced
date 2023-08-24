@@ -45,6 +45,7 @@ func main() {
 	if err != nil {
 		instancer.echo.Logger.Fatalf("error creating k8s configuration: %s", err)
 	}
+	rest.SetKubernetesDefaults(instancer.k8sConfig)
 	instancer.k8sClientSet, err = kubernetes.NewForConfig(instancer.k8sConfig)
 	if err != nil {
 		instancer.echo.Logger.Fatalf("error initializing client: %s", err)
@@ -160,11 +161,9 @@ func createObject(clientSet kubernetes.Interface, config *rest.Config, obj runti
 	if err != nil {
 		return nil, err
 	}
-	gv := mapping.GroupVersionKind.GroupVersion()
-	// cursed mutation
-	config.GroupVersion = &gv
+
 	// Create a client specifically for creating the object.
-	restClient, err := rest.RESTClientFor(config)
+	restClient, err := newRestClient(config, mapping.GroupVersionKind.GroupVersion())
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +171,18 @@ func createObject(clientSet kubernetes.Interface, config *rest.Config, obj runti
 	// Use the REST helper to create the object in the "default" namespace.
 	restHelper := resource.NewHelper(restClient, mapping)
 	return restHelper.Create("challenges", false, obj)
+}
+
+func newRestClient(restConfig *rest.Config, gv schema.GroupVersion) (rest.Interface, error) {
+	restConfig.ContentConfig = resource.UnstructuredPlusDefaultContentConfig()
+	restConfig.GroupVersion = &gv
+	if len(gv.Group) == 0 {
+		restConfig.APIPath = "/api"
+	} else {
+		restConfig.APIPath = "/apis"
+	}
+
+	return rest.RESTClientFor(restConfig)
 }
 
 /*
