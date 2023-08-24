@@ -53,7 +53,7 @@ jobs:
 
     - name: Docker configuration
       run: |-
-        gcloud auth configure-docker
+        gcloud auth configure-docker $GCR_URL
 
     # Build the Docker image
     - name: Build

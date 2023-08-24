@@ -160,6 +160,9 @@ func createObject(clientSet kubernetes.Interface, config *rest.Config, obj runti
 	if err != nil {
 		return nil, err
 	}
+	gv := mapping.GroupVersionKind.GroupVersion()
+	// cursed mutation
+	config.GroupVersion = &gv
 	// Create a client specifically for creating the object.
 	restClient, err := rest.RESTClientFor(config)
 	if err != nil {
