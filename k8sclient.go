@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -59,19 +61,7 @@ func (in *Instancer) UnmarshalChallenges(challenges map[string]string) (map[stri
 // to create an object of that Resource using unstructObj as the specification.
 // https://book.kubebuilder.io/cronjob-tutorial/gvks.html
 func (in *Instancer) CreateObject(unstructObj *unstructured.Unstructured, namespace string) (*unstructured.Unstructured, error) {
-
-	c, err := discovery.NewDiscoveryClientForConfig(in.k8sConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	groupResources, err := restmapper.GetAPIGroupResources(c)
-	if err != nil {
-		return nil, err
-	}
-
-	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
-	mapping, err := mapper.RESTMapping(unstructObj.GetObjectKind().GroupVersionKind().GroupKind())
+	resource, err := in.GetObjectResource(unstructObj)
 	if err != nil {
 		return nil, err
 	}
@@ -81,10 +71,81 @@ func (in *Instancer) CreateObject(unstructObj *unstructured.Unstructured, namesp
 		return nil, err
 	}
 
-	resObj, err := client.Resource(mapping.Resource).Namespace(namespace).Create(context.TODO(), unstructObj, metav1.CreateOptions{})
+	resObj, err := client.Resource(resource).Namespace(namespace).Create(context.TODO(), unstructObj, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	return resObj, nil
+}
+
+func (in *Instancer) DeleteObject(unstructObj *unstructured.Unstructured, namespace string) error {
+	resource, err := in.GetObjectResource(unstructObj)
+	if err != nil {
+		return err
+	}
+
+	deletePolicy := metav1.DeletePropagationForeground
+	deleteOptions := metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	}
+
+	client, err := dynamic.NewForConfig(in.k8sConfig)
+	if err != nil {
+		return err
+	}
+
+	if err := client.Resource(resource).Namespace(namespace).Delete(context.TODO(), unstructObj.GetName(), deleteOptions); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (in *Instancer) ListObjects(unstructObj *unstructured.Unstructured, namespace string) ([]string, error) {
+	resource, err := in.GetObjectResource(unstructObj)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := dynamic.NewForConfig(in.k8sConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	list, err := client.Resource(resource).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	// todo: replace example code below
+	for _, d := range list.Items {
+		replicas, found, err := unstructured.NestedInt64(d.Object, "spec", "replicas")
+		if err != nil || !found {
+			fmt.Printf("Replicas not found for deployment %s: error=%s", d.GetName(), err)
+			continue
+		}
+		fmt.Printf(" * %s (%d replicas)\n", d.GetName(), replicas)
+	}
+	return nil, nil
+}
+
+// todo: query and cache gvr on init, not for every request
+func (in *Instancer) GetObjectResource(unstructObj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
+	c, err := discovery.NewDiscoveryClientForConfig(in.k8sConfig)
+	if err != nil {
+		return schema.GroupVersionResource{}, err
+	}
+
+	groupResources, err := restmapper.GetAPIGroupResources(c)
+	if err != nil {
+		return schema.GroupVersionResource{}, err
+	}
+
+	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
+	mapping, err := mapper.RESTMapping(unstructObj.GetObjectKind().GroupVersionKind().GroupKind())
+	if err != nil {
+		return schema.GroupVersionResource{}, err
+	}
+
+	return mapping.Resource, nil
 }
