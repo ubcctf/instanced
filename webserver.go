@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -37,9 +38,18 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 	var err error
 
 	// todo: copy and rename template objects
+	expiry, err := in.InsertInstanceRecord(time.Minute*2, chalName)
+	if err != nil {
+		c.Logger().Errorf("could not insert instance record: %s", err)
+	} else {
+		c.Logger().Infof("registered instance with expiry: %s", expiry)
+	}
 	c.Logger().Infof("creating %d objects", len(templateObjs))
 	for _, o := range templateObjs {
-		resObj, err := in.CreateObject(&o, "challenges")
+		obj := o.DeepCopy()
+		// todo: set proper name
+		obj.SetName("instancer-test")
+		resObj, err := in.CreateObject(obj, "challenges")
 		in.echo.Logger.Debugf("creating %s", resObj)
 		if err != nil {
 			break
