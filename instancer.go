@@ -3,76 +3,94 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 type Instancer struct {
 	k8sConfig     *rest.Config
-	k8sClientSet  *kubernetes.Clientset
 	config        *Config
 	echo          *echo.Echo
 	challengeObjs map[string][]unstructured.Unstructured
 	db            *sql.DB
+	log           zerolog.Logger
 }
 
 func InitInstancer() (*Instancer, error) {
 	in := Instancer{
 		echo: echo.New(),
 	}
-	in.echo.Logger.SetLevel(log.DEBUG)
+	in.echo.HideBanner = true
+	in.log = zlog.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(zerolog.DebugLevel)
+	in.echo.Logger = NewEchoLog(in.log)
+	log := in.log.With().Str("component", "instanced-init").Logger()
+
 	in.registerEndpoints()
 
 	var err error
 	in.config, err = loadConfig()
 	if err != nil {
-		in.echo.Logger.Fatalf("error loading config: %s", err)
+		log.Fatal().Err(err).Msg("could not load config")
 	}
+	log.Info().Int("count", len(in.config.Challenges)).Msg("read challenges from config")
+	log.Debug().Str("value", in.config.ListenAddr).Msg("read listenAddr from config")
 
-	in.challengeObjs, err = in.UnmarshalChallenges(in.config.Challenges)
+	in.challengeObjs, err = UnmarshalChallenges(in.config.Challenges)
 	if err != nil {
-		in.echo.Logger.Fatalf("error unmarshalling challenges: %s", err)
+		log.Fatal().Err(err).Msg("could not parse challenge manifests")
 	}
+	for k := range in.challengeObjs {
+		log.Info().Str("challenge", k).Msg("parsed challenge manifest")
+	}
+	log.Info().Int("count", len(in.challengeObjs)).Msg("parsed challenges")
 
 	in.k8sConfig, err = rest.InClusterConfig()
 	if err != nil {
-		in.echo.Logger.Fatalf("error creating k8s configuration: %s", err)
+		log.Fatal().Err(err).Msg("could not create kube-api client config")
 	}
 	rest.SetKubernetesDefaults(in.k8sConfig)
+	log.Debug().Str("config", fmt.Sprintf("%+v", in.k8sConfig)).Msg("loaded kube-api client config")
 
-	in.k8sClientSet, err = kubernetes.NewForConfig(in.k8sConfig)
+	err = in.InitDB("/data/instancer.db")
 	if err != nil {
-		in.echo.Logger.Fatalf("error initializing client: %s", err)
+		log.Fatal().Err(err).Msg("could not init sqlite db")
 	}
+	log.Info().Msg("initialized database")
 
 	return &in, nil
 }
 
 func (in *Instancer) DestoryExpiredInstances() {
+	log := in.log.With().Str("component", "instanced").Logger()
 	instances, err := in.ReadInstanceRecords()
 	if err != nil {
-		in.echo.Logger.Errorf("error reading instance records: %s", err)
+		log.Error().Err(err).Msg("error reading instance records")
+		return
 	}
+	log.Info().Int("count", len(instances)).Msg("found instances")
 	for _, i := range instances {
+		log.Debug().Any("record", i).Msg("found instance record")
 		if time.Now().After(i.expiry) {
-			in.echo.Logger.Infof("destroying instance %s", i.id)
+			log.Info().Int("id", i.id).Msg("destroying expired instance")
 			err := in.DestroyInstance(i)
 			if err != nil {
-				in.echo.Logger.Errorf("error destroying instance: %s", err)
+				log.Error().Err(err).Msg("error destroying instance")
 			}
 		}
 	}
 }
 
 func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
+	log := in.log.With().Str("component", "instanced").Logger()
 	chal, ok := in.challengeObjs[rec.challenge]
 	if !ok {
-		return fmt.Errorf("manifest for challenge %s not in memory", rec.challenge)
+		return fmt.Errorf("manifest for challenge %v not in memory", rec.challenge)
 	}
 	for _, o := range chal {
 		obj := o.DeepCopy()
@@ -80,27 +98,28 @@ func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
 		obj.SetName("instancer-test")
 		err := in.DeleteObject(obj, "challenges")
 		if err != nil {
-			in.echo.Logger.Warnf("error deleting object %s: %s", obj.GetName(), err)
+			log.Warn().Err(err).Str("name", obj.GetName()).Str("kind", obj.GetKind()).Msg("error deleting object")
 		}
 	}
 	err := in.DeleteInstanceRecord(rec.id)
 	if err != nil {
-		in.echo.Logger.Warnf("error deleting instance record: %s", err)
+		log.Warn().Err(err).Msg("error deleting instance record")
 	}
 	return nil
 }
 
 func (in *Instancer) Start() error {
+	log := in.log.With().Str("component", "instanced").Logger()
+	log.Info().Msg("starting webserver...")
 	// Start Webserver
-	go in.echo.Logger.Fatal(in.echo.Start(in.config.ListenAddr))
+	go in.echo.Start(":8080")
 
 	// Ticker to read db for expired instances
-	checkExpiry := time.NewTicker(time.Minute).C
-
+	log.Info().Msg("starting instance monitoring loop")
 	// todo: some sort of garbage collection for instances that we somehow lost track of
 	for {
-		<-checkExpiry
-		in.echo.Logger.Info("checking for expired instances...")
+		log.Info().Msg("checking for expired instances...")
 		in.DestoryExpiredInstances()
+		time.Sleep(time.Second * 60)
 	}
 }

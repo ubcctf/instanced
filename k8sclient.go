@@ -29,7 +29,7 @@ func UnmarshalSingleManifest(manifest string) (*unstructured.Unstructured, error
 // delimited by '---' and returns a list of objects in it
 func UnmarshalManifestFile(content string) ([]unstructured.Unstructured, error) {
 	objYamls := strings.Split(content, "---")
-	res := make([]unstructured.Unstructured, len(objYamls))
+	res := make([]unstructured.Unstructured, 0)
 	for _, v := range objYamls {
 		if v == "\n" || v == "" {
 			// ignore empty cases
@@ -44,7 +44,7 @@ func UnmarshalManifestFile(content string) ([]unstructured.Unstructured, error) 
 	return res, nil
 }
 
-func (in *Instancer) UnmarshalChallenges(challenges map[string]string) (map[string][]unstructured.Unstructured, error) {
+func UnmarshalChallenges(challenges map[string]string) (map[string][]unstructured.Unstructured, error) {
 	res := make(map[string][]unstructured.Unstructured, len(challenges))
 	for k, v := range challenges {
 		objs, err := UnmarshalManifestFile(v)
@@ -121,10 +121,10 @@ func (in *Instancer) ListObjects(unstructObj *unstructured.Unstructured, namespa
 	for _, d := range list.Items {
 		replicas, found, err := unstructured.NestedInt64(d.Object, "spec", "replicas")
 		if err != nil || !found {
-			fmt.Printf("Replicas not found for deployment %s: error=%s", d.GetName(), err)
+			fmt.Printf("Replicas not found for deployment %v: error=%v", d.GetName(), err)
 			continue
 		}
-		fmt.Printf(" * %s (%d replicas)\n", d.GetName(), replicas)
+		fmt.Printf(" * %v (%d replicas)\n", d.GetName(), replicas)
 	}
 	return nil, nil
 }

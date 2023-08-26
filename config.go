@@ -16,12 +16,12 @@ type Config struct {
 func loadConfig() (*Config, error) {
 	confb, err := os.ReadFile("/config/config.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("when reading config file:\n\t%s", err)
+		return nil, fmt.Errorf("when reading config file:\n\t%v", err)
 	}
 	conf := Config{}
-	err = yaml.Unmarshal(confb, conf)
+	err = yaml.Unmarshal(confb, &conf)
 	if err != nil {
-		return nil, fmt.Errorf("when parsing config file:\n\t%s", err)
+		return nil, fmt.Errorf("when parsing config file:\n\t%v", err)
 	}
 	return &conf, nil
 }
