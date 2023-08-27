@@ -2,6 +2,7 @@ apiVersion: "k8s.maplebacon.org/unstable"
 kind: InstancedChallenge
 metadata:
   name: nginx
+  namespace: challenges
 spec:
   resources:
   - apiVersion: apps/v1

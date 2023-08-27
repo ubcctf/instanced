@@ -28,6 +28,7 @@ func InitInstancer() (*Instancer, error) {
 		echo: echo.New(),
 	}
 	in.echo.HideBanner = true
+	in.echo.HidePort = true
 	in.log = zlog.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(zerolog.DebugLevel)
 	in.echo.Logger = NewEchoLog(in.log)
 	log := in.log.With().Str("component", "instanced-init").Logger()
@@ -58,6 +59,20 @@ func InitInstancer() (*Instancer, error) {
 	rest.SetKubernetesDefaults(in.k8sConfig)
 	log.Debug().Str("config", fmt.Sprintf("%+v", in.k8sConfig)).Msg("loaded kube-api client config")
 
+	// Test CRDs
+	log.Debug().Msg("querying CRDs")
+	crdChallObjs, err := in.QueryInstancedChallenges("challenges")
+	if err != nil {
+		log.Debug().Err(err).Msg("error retrieving challenge definitions from CRDs")
+	} else {
+		for k, o := range crdChallObjs {
+			log.Debug().Str("challenge", k).Msg("parsed challenge from CRD")
+			for _, v := range o {
+				log.Debug().Str("kind", v.GetKind()).Str("name", v.GetName()).Str("challenge", k).Msg("parsed resource")
+			}
+		}
+	}
+
 	err = in.InitDB("/data/instancer.db")
 	if err != nil {
 		log.Fatal().Err(err).Msg("could not init sqlite db")
@@ -77,9 +92,9 @@ func (in *Instancer) DestoryExpiredInstances() {
 	log.Info().Int("count", len(instances)).Msg("instances found")
 	for _, i := range instances {
 		// Any does not marshall properly
-		log.Debug().Int64("id", i.id).Time("expiry", i.expiry).Str("challenge", i.challenge).Msg("instance record found")
-		if time.Now().After(i.expiry) {
-			log.Info().Int64("id", i.id).Str("challenge", i.challenge).Msg("destroying expired instance")
+		log.Debug().Int64("id", i.Id).Time("expiry", i.Expiry).Str("challenge", i.Challenge).Msg("instance record found")
+		if time.Now().After(i.Expiry) {
+			log.Info().Int64("id", i.Id).Str("challenge", i.Challenge).Msg("destroying expired instance")
 			err := in.DestroyInstance(i)
 			if err != nil {
 				log.Error().Err(err).Msg("error destroying instance")
@@ -90,20 +105,20 @@ func (in *Instancer) DestoryExpiredInstances() {
 
 func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
 	log := in.log.With().Str("component", "instanced").Logger()
-	chal, ok := in.challengeObjs[rec.challenge]
+	chal, ok := in.challengeObjs[rec.Challenge]
 	if !ok {
-		return &ChallengeNotFoundError{rec.challenge}
+		return &ChallengeNotFoundError{rec.Challenge}
 	}
 	for _, o := range chal {
 		obj := o.DeepCopy()
 		// todo: set proper name
-		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.id))
+		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.Id))
 		err := in.DeleteObject(obj, "challenges")
 		if err != nil {
 			log.Warn().Err(err).Str("name", obj.GetName()).Str("kind", obj.GetKind()).Msg("error deleting object")
 		}
 	}
-	err := in.DeleteInstanceRecord(rec.id)
+	err := in.DeleteInstanceRecord(rec.Id)
 	if err != nil {
 		log.Warn().Err(err).Msg("error deleting instance record")
 	}
@@ -130,16 +145,16 @@ func (in *Instancer) CreateInstance(challenge string) (InstanceRecord, error) {
 	if err != nil {
 		log.Error().Err(err).Msg("could not create instance record")
 	} else {
-		log.Info().Time("expiry", rec.expiry).
-			Str("challenge", rec.challenge).
-			Int64("id", rec.id).
+		log.Info().Time("expiry", rec.Expiry).
+			Str("challenge", rec.Challenge).
+			Int64("id", rec.Id).
 			Msg("registered new instance")
 	}
 
 	log.Info().Int("count", len(chal)).Msg("creating objects")
 	for _, o := range chal {
 		obj := o.DeepCopy()
-		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.id))
+		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.Id))
 		resObj, err := in.CreateObject(obj, "challenges")
 		log.Debug().Any("object", resObj).Msg("created object")
 		if err != nil {

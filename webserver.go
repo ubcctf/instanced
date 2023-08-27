@@ -49,7 +49,7 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
 	}
 	c.Logger().Info("processed request to provision new instance")
-	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.id})
+	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id})
 }
 
 func (in *Instancer) handleInstanceDelete(c echo.Context) error {

@@ -9,9 +9,9 @@ import (
 )
 
 type InstanceRecord struct {
-	id        int64
-	expiry    time.Time
-	challenge string
+	Id        int64     `json:"id"`
+	Expiry    time.Time `json:"expiry"`
+	Challenge string    `json:"challenge"`
 }
 
 func (in *Instancer) InitDB(file string) error {
@@ -60,9 +60,9 @@ func (in *Instancer) InsertInstanceRecord(ttl time.Duration, challenge string) (
 	}
 
 	return InstanceRecord{
-		id:        id,
-		expiry:    expiry,
-		challenge: challenge,
+		Id:        id,
+		Expiry:    expiry,
+		Challenge: challenge,
 	}, nil
 }
 
@@ -97,11 +97,11 @@ func (in *Instancer) ReadInstanceRecords() ([]InstanceRecord, error) {
 	for rows.Next() {
 		record := InstanceRecord{}
 		var t int64
-		err = rows.Scan(&record.id, &record.challenge, &t)
+		err = rows.Scan(&record.Id, &record.Challenge, &t)
 		if err != nil {
 			return records, err
 		}
-		record.expiry = time.Unix(t, 0)
+		record.Expiry = time.Unix(t, 0)
 		records = append(records, record)
 	}
 	err = rows.Err()

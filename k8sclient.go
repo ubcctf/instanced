@@ -149,3 +149,77 @@ func (in *Instancer) GetObjectResource(unstructObj *unstructured.Unstructured) (
 
 	return mapping.Resource, nil
 }
+
+func (in *Instancer) QueryInstancedChallenges(namespace string) (map[string][]unstructured.Unstructured, error) {
+	resource := schema.GroupVersionResource{
+		Group:    "k8s.maplebacon.org",
+		Version:  "unstable",
+		Resource: "instancedchallenges",
+	}
+
+	client, err := dynamic.NewForConfig(in.k8sConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	chalList, err := client.Resource(resource).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make(map[string][]unstructured.Unstructured)
+
+	for _, c := range chalList.Items {
+		resources, found, err := unstructured.NestedSlice(c.Object, "spec", "resources")
+		if err != nil || !found {
+			fmt.Printf("resources not found for challenge crd %v: error=%v", c.GetName(), err)
+			continue
+		}
+
+		res := make([]unstructured.Unstructured, 0)
+
+		for _, r := range resources {
+			obj, ok := r.(map[string]interface{})
+			if !ok {
+				fmt.Printf("could not parse object")
+			}
+			res = append(res, unstructured.Unstructured{Object: obj})
+		}
+		ret[c.GetName()] = res
+	}
+	return ret, nil
+}
+
+func (in *Instancer) QueryInstancedChallenge(name string, namespace string) ([]unstructured.Unstructured, error) {
+	resource := schema.GroupVersionResource{
+		Group:    "k8s.maplebacon.org",
+		Version:  "unstable",
+		Resource: "instancedchallenges",
+	}
+
+	client, err := dynamic.NewForConfig(in.k8sConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	chal, err := client.Resource(resource).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	resources, found, err := unstructured.NestedSlice(chal.Object, "spec", "resources")
+	if err != nil || !found {
+		fmt.Printf("resources not found for challenge crd %v: error=%v", chal.GetName(), err)
+		return nil, err
+	}
+	res := make([]unstructured.Unstructured, 0)
+	for _, r := range resources {
+		obj, ok := r.(map[string]interface{})
+		if !ok {
+			fmt.Printf("could not parse object")
+		}
+		res = append(res, unstructured.Unstructured{Object: obj})
+	}
+
+	return res, nil
+}
