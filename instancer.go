@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -73,11 +74,12 @@ func (in *Instancer) DestoryExpiredInstances() {
 		log.Error().Err(err).Msg("error reading instance records")
 		return
 	}
-	log.Info().Int("count", len(instances)).Msg("found instances")
+	log.Info().Int("count", len(instances)).Msg("instances found")
 	for _, i := range instances {
-		log.Debug().Any("record", i).Msg("found instance record")
+		// Any does not marshall properly
+		log.Debug().Int64("id", i.id).Time("expiry", i.expiry).Str("challenge", i.challenge).Msg("instance record found")
 		if time.Now().After(i.expiry) {
-			log.Info().Int("id", i.id).Msg("destroying expired instance")
+			log.Info().Int64("id", i.id).Str("challenge", i.challenge).Msg("destroying expired instance")
 			err := in.DestroyInstance(i)
 			if err != nil {
 				log.Error().Err(err).Msg("error destroying instance")
@@ -90,12 +92,12 @@ func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
 	log := in.log.With().Str("component", "instanced").Logger()
 	chal, ok := in.challengeObjs[rec.challenge]
 	if !ok {
-		return fmt.Errorf("manifest for challenge %v not in memory", rec.challenge)
+		return &ChallengeNotFoundError{rec.challenge}
 	}
 	for _, o := range chal {
 		obj := o.DeepCopy()
 		// todo: set proper name
-		obj.SetName("instancer-test")
+		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.id))
 		err := in.DeleteObject(obj, "challenges")
 		if err != nil {
 			log.Warn().Err(err).Str("name", obj.GetName()).Str("kind", obj.GetKind()).Msg("error deleting object")
@@ -108,11 +110,57 @@ func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
 	return nil
 }
 
+func (in *Instancer) CreateInstance(challenge string) (InstanceRecord, error) {
+	log := in.log.With().Str("component", "instanced").Logger()
+
+	chal, ok := in.challengeObjs[challenge]
+	if !ok {
+		return InstanceRecord{}, &ChallengeNotFoundError{challenge}
+	}
+
+	var err error
+
+	ttl, err := time.ParseDuration(in.config.InstanceTTL)
+	if err != nil {
+		log.Warn().Err(err).Msg("could not parse instance ttl, defaulting to 10 minutes")
+		ttl = 10 * time.Minute
+	}
+
+	rec, err := in.InsertInstanceRecord(ttl, challenge)
+	if err != nil {
+		log.Error().Err(err).Msg("could not create instance record")
+	} else {
+		log.Info().Time("expiry", rec.expiry).
+			Str("challenge", rec.challenge).
+			Int64("id", rec.id).
+			Msg("registered new instance")
+	}
+
+	log.Info().Int("count", len(chal)).Msg("creating objects")
+	for _, o := range chal {
+		obj := o.DeepCopy()
+		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.id))
+		resObj, err := in.CreateObject(obj, "challenges")
+		log.Debug().Any("object", resObj).Msg("created object")
+		if err != nil {
+			break
+		}
+		log.Info().Str("kind", resObj.GetKind()).Str("name", resObj.GetName()).Msg("created object")
+	}
+	if err != nil {
+		// todo: handle errors/cleanup incomplete deploys?
+		log.Error().Err(err).Msg("could not create an object")
+		log.Info().Msg("instance creation incomplete, manual intervention required")
+		return InstanceRecord{}, errors.New("instance deployment failed")
+	}
+	return rec, nil
+}
+
 func (in *Instancer) Start() error {
 	log := in.log.With().Str("component", "instanced").Logger()
 	log.Info().Msg("starting webserver...")
 	// Start Webserver
-	go in.echo.Start(":8080")
+	go in.echo.Start(in.config.ListenAddr)
 
 	// Ticker to read db for expired instances
 	log.Info().Msg("starting instance monitoring loop")

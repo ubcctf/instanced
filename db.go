@@ -8,13 +8,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var initStatement = `
-CREATE TABLE IF NOT EXISTS instances(id INTEGER PRIMARY KEY, challenge TEXT, expiry INTEGER);
-DELETE FROM instances;
-`
-
 type InstanceRecord struct {
-	id        int
+	id        int64
 	expiry    time.Time
 	challenge string
 }
@@ -24,35 +19,54 @@ func (in *Instancer) InitDB(file string) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec(initStatement)
+	in.db = db
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS instances(id INTEGER PRIMARY KEY, challenge TEXT, expiry INTEGER);")
 	if err != nil {
 		return err
 	}
-	in.db = db
+
+	if !in.config.ResetDB {
+		return nil
+	}
+
+	_, err = db.Exec("DELETE FROM instances;")
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (in *Instancer) InsertInstanceRecord(ttl time.Duration, challenge string) (time.Time, error) {
+func (in *Instancer) InsertInstanceRecord(ttl time.Duration, challenge string) (InstanceRecord, error) {
 	if in.db == nil {
-		return time.Time{}, errors.New("db not initialized")
+		return InstanceRecord{}, errors.New("db not initialized")
 	}
 	expiry := time.Now().Add(ttl)
 
 	stmt, err := in.db.Prepare("INSERT INTO instances(challenge, expiry) values(?, ?)")
 	if err != nil {
-		return time.Now(), err
+		return InstanceRecord{}, err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(challenge, expiry.Unix())
+	res, err := stmt.Exec(challenge, expiry.Unix())
 	if err != nil {
-		return time.Now(), err
+		return InstanceRecord{}, err
 	}
 
-	return expiry, nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		return InstanceRecord{}, err
+	}
+
+	return InstanceRecord{
+		id:        id,
+		expiry:    expiry,
+		challenge: challenge,
+	}, nil
 }
 
-func (in *Instancer) DeleteInstanceRecord(id int) error {
+func (in *Instancer) DeleteInstanceRecord(id int64) error {
 	if in.db == nil {
 		return errors.New("db not initialized")
 	}

@@ -155,19 +155,3 @@ func zltoel(l zerolog.Level) log.Lvl {
 	}
 	return log.OFF
 }
-
-func eltozl(l log.Lvl) zerolog.Level {
-	switch l {
-	case log.OFF:
-		return zerolog.Disabled
-	case log.ERROR:
-		return zerolog.ErrorLevel
-	case log.WARN:
-		return zerolog.WarnLevel
-	case log.INFO:
-		return zerolog.InfoLevel
-	case log.DEBUG:
-		return zerolog.TraceLevel
-	}
-	return zerolog.Disabled
-}
