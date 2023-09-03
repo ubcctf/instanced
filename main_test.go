@@ -142,7 +142,7 @@ spec:
 func ExampleInsertInstanceRecord() {
 	in := Instancer{}
 	in.InitDB("./tmp/test.db")
-	in.InsertInstanceRecord(time.Hour, "test_challenge")
+	in.InsertInstanceRecord(time.Hour, "1", "test_challenge")
 	recs, err := in.ReadInstanceRecords()
 	if err != nil {
 		log.Fatal(err)

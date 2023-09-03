@@ -23,6 +23,7 @@ type InstancesResponse struct {
 	Action    string `json:"action"`
 	Challenge string `json:"challenge"`
 	ID        int64  `json:"id"`
+	URL       string `json:"url"`
 }
 
 func (in *Instancer) handleLivenessCheck(c echo.Context) error {
@@ -31,14 +32,9 @@ func (in *Instancer) handleLivenessCheck(c echo.Context) error {
 
 func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 	chalName := c.QueryParam("chal")
-	token := c.QueryParam("token")
+	teamID := c.QueryParam("team")
 
-	// todo: check an auth token or something
-	if token == "" {
-		c.Logger().Info("request rejected with no token")
-		return c.JSON(http.StatusForbidden, "team token not provided")
-	}
-	rec, err := in.CreateInstance(chalName)
+	rec, err := in.CreateInstance(chalName, teamID)
 	if _, ok := err.(*ChallengeNotFoundError); ok {
 		return c.JSON(http.StatusNotFound, "challenge not supported")
 	}
@@ -49,25 +45,18 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
 	}
 	c.Logger().Info("processed request to provision new instance")
-	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id})
+	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id, "TODO"})
 }
 
 func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 	chalName := c.QueryParam("chal")
-	token := c.QueryParam("token")
 	instanceID, err := strconv.ParseInt(c.QueryParam("id"), 10, 64)
 
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, "invalid id")
 	}
 
-	// todo: check an auth token or something
-	if token == "" {
-		c.Logger().Info("request rejected with no token")
-		return c.JSON(http.StatusForbidden, "team token not provided")
-	}
-
-	err = in.DestroyInstance(InstanceRecord{instanceID, time.Now(), chalName})
+	err = in.DestroyInstance(InstanceRecord{instanceID, time.Now(), chalName, ""})
 
 	if _, ok := err.(*ChallengeNotFoundError); ok {
 		return c.JSON(http.StatusNotFound, "challenge not supported")
@@ -80,7 +69,7 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 	}
 	c.Logger().Info("processed request to destroy an instance")
 
-	return c.JSON(http.StatusAccepted, InstancesResponse{"destroyed", chalName, instanceID})
+	return c.JSON(http.StatusAccepted, InstancesResponse{"destroyed", chalName, instanceID, "TODO"})
 }
 
 func (in *Instancer) handleInstanceList(c echo.Context) error {

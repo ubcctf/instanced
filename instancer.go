@@ -125,7 +125,7 @@ func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
 	return nil
 }
 
-func (in *Instancer) CreateInstance(challenge string) (InstanceRecord, error) {
+func (in *Instancer) CreateInstance(challenge, team string) (InstanceRecord, error) {
 	log := in.log.With().Str("component", "instanced").Logger()
 
 	chal, ok := in.challengeObjs[challenge]
@@ -141,7 +141,7 @@ func (in *Instancer) CreateInstance(challenge string) (InstanceRecord, error) {
 		ttl = 10 * time.Minute
 	}
 
-	rec, err := in.InsertInstanceRecord(ttl, challenge)
+	rec, err := in.InsertInstanceRecord(ttl, team, challenge)
 	if err != nil {
 		log.Error().Err(err).Msg("could not create instance record")
 	} else {

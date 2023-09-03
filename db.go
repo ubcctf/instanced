@@ -8,10 +8,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// InstanceRecord is a record used to keep track of an active instance
 type InstanceRecord struct {
 	Id        int64     `json:"id"`
 	Expiry    time.Time `json:"expiry"`
 	Challenge string    `json:"challenge"`
+	TeamID    string    `json:"team"`
 }
 
 func (in *Instancer) InitDB(file string) error {
@@ -20,7 +22,7 @@ func (in *Instancer) InitDB(file string) error {
 		return err
 	}
 	in.db = db
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS instances(id INTEGER PRIMARY KEY, challenge TEXT, expiry INTEGER);")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS instances(id INTEGER PRIMARY KEY, challenge TEXT, team TEXT, expiry INTEGER);")
 	if err != nil {
 		return err
 	}
@@ -37,19 +39,19 @@ func (in *Instancer) InitDB(file string) error {
 	return nil
 }
 
-func (in *Instancer) InsertInstanceRecord(ttl time.Duration, challenge string) (InstanceRecord, error) {
+func (in *Instancer) InsertInstanceRecord(ttl time.Duration, team string, challenge string) (InstanceRecord, error) {
 	if in.db == nil {
 		return InstanceRecord{}, errors.New("db not initialized")
 	}
 	expiry := time.Now().Add(ttl)
 
-	stmt, err := in.db.Prepare("INSERT INTO instances(challenge, expiry) values(?, ?)")
+	stmt, err := in.db.Prepare("INSERT INTO instances(challenge, team, expiry) values(?, ?, ?)")
 	if err != nil {
 		return InstanceRecord{}, err
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(challenge, expiry.Unix())
+	res, err := stmt.Exec(challenge, team, expiry.Unix())
 	if err != nil {
 		return InstanceRecord{}, err
 	}
@@ -88,7 +90,7 @@ func (in *Instancer) ReadInstanceRecords() ([]InstanceRecord, error) {
 	if in.db == nil {
 		return nil, errors.New("db not initialized")
 	}
-	rows, err := in.db.Query("SELECT id, challenge, expiry FROM instances")
+	rows, err := in.db.Query("SELECT id, challenge, team, expiry FROM instances")
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +99,7 @@ func (in *Instancer) ReadInstanceRecords() ([]InstanceRecord, error) {
 	for rows.Next() {
 		record := InstanceRecord{}
 		var t int64
-		err = rows.Scan(&record.Id, &record.Challenge, &t)
+		err = rows.Scan(&record.Id, &record.Challenge, &record.TeamID, &t)
 		if err != nil {
 			return records, err
 		}
