@@ -54,4 +54,6 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         push: true
-        tags: "$GCR_URL/$PROJECT_ID/$IMAGE:$GITHUB_SHA,$GCR_URL/$PROJECT_ID/$IMAGE:latest"
+        tags: |
+          $GCR_URL/$PROJECT_ID/$IMAGE:$GITHUB_SHA
+          $GCR_URL/$PROJECT_ID/$IMAGE:latest"
