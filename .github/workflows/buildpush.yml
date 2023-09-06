@@ -48,7 +48,7 @@ jobs:
         gcloud auth configure-docker $GCR_URL
     # Build and Push the Docker image
     - name: Build
-    - uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v2
       with:
         context: .
         cache-from: type=gha
