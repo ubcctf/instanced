@@ -109,3 +109,33 @@ func (in *Instancer) ReadInstanceRecords() ([]InstanceRecord, error) {
 	err = rows.Err()
 	return records, err
 }
+
+func (in *Instancer) ReadInstanceRecordsTeam(teamID string) ([]InstanceRecord, error) {
+	if in.db == nil {
+		return nil, errors.New("db not initialized")
+	}
+	stmt, err := in.db.Prepare("SELECT id, challenge, team, expiry FROM instances WHERE team = ?")
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := make([]InstanceRecord, 0)
+	for rows.Next() {
+		record := InstanceRecord{}
+		var t int64
+		err = rows.Scan(&record.Id, &record.Challenge, &record.TeamID, &t)
+		if err != nil {
+			return records, err
+		}
+		record.Expiry = time.Unix(t, 0)
+		records = append(records, record)
+	}
+	err = rows.Err()
+	return records, err
+}

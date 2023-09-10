@@ -17,6 +17,8 @@ func (in *Instancer) registerEndpoints() {
 	in.echo.POST("/instances", in.handleInstanceCreate)
 
 	in.echo.DELETE("/instances", in.handleInstanceDelete)
+
+	in.echo.GET("/challenges", in.handleInstanceListTeam)
 }
 
 type InstancesResponse struct {
@@ -75,6 +77,17 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 func (in *Instancer) handleInstanceList(c echo.Context) error {
 	// todo: authenticate
 	records, err := in.ReadInstanceRecords()
+	if err != nil {
+		c.Logger().Errorf("request failed: %v", err)
+		return c.JSON(http.StatusInternalServerError, "request failed")
+	}
+	// todo: properly marshal records
+	return c.JSON(http.StatusOK, records)
+}
+
+func (in *Instancer) handleInstanceListTeam(c echo.Context) error {
+	teamID := c.QueryParam("team")
+	records, err := in.GetTeamChallengeStates(teamID)
 	if err != nil {
 		c.Logger().Errorf("request failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, "request failed")

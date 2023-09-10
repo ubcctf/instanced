@@ -171,6 +171,26 @@ func (in *Instancer) CreateInstance(challenge, team string) (InstanceRecord, err
 	return rec, nil
 }
 
+func (in *Instancer) GetTeamChallengeStates(teamID string) ([]InstanceRecord, error) {
+	instances, err := in.ReadInstanceRecordsTeam(teamID)
+	if err != nil {
+		return nil, err
+	}
+	for k := range in.challengeObjs {
+		active := false
+		for _, v := range instances {
+			if v.Challenge == k {
+				active = true
+				break
+			}
+		}
+		if !active {
+			instances = append(instances, InstanceRecord{Expiry: time.Unix(0, 0), Challenge: k, TeamID: teamID})
+		}
+	}
+	return instances, nil
+}
+
 func (in *Instancer) Start() error {
 	log := in.log.With().Str("component", "instanced").Logger()
 	log.Info().Msg("starting webserver...")
