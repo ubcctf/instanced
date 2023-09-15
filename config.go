@@ -13,6 +13,7 @@ type Config struct {
 	ListenAddr  string            `json:"listenAddr"`
 	ResetDB     bool              `json:"resetDB"`
 	InstanceTTL string            `json:"instanceTTL"`
+	UseTemplate string            `json:"useTemplate"`
 }
 
 func loadConfig() (*Config, error) {

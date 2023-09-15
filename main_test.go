@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func ExampleUnmarshalSingleManifest() {
@@ -139,10 +141,62 @@ spec:
 	// Output:
 }
 
+func ExampleGetChalObjsFromTemplate() {
+	log.Println("Running: ExampleGetChalObjsFromTemplate")
+	in := Instancer{}
+	in.config = &Config{}
+	in.config.Challenges = make(map[string]string, 2)
+	in.config.Challenges["nginx"] = `---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-instance-{{.ID}}-deployment
+  namespace: challenges
+spec:
+  selector:
+    matchLabels:
+      app: nginx-instance-{{.ID}}
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: nginx-instance-{{.ID}}
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-instance-{{.ID}}
+  namespace: challenges
+spec:
+  selector:
+    app: nginx-instance-{{.ID}}
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 80
+---
+`
+	in.ParseTemplates()
+	chal, err := in.GetChalObjsFromTemplate("nginx", uuid.NewString()[0:8])
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println(len(chal))
+	log.Println(chal)
+	// Output:
+}
+
 func ExampleInsertInstanceRecord() {
 	in := Instancer{}
 	in.InitDB("./tmp/test.db")
-	in.InsertInstanceRecord(time.Hour, "1", "test_challenge")
+	in.InsertInstanceRecord(time.Hour, "1", "test_challenge", "abcdefg")
 	recs, err := in.ReadInstanceRecords()
 	if err != nil {
 		log.Fatal(err)

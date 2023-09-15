@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/lithammer/shortuuid/v3 v3.0.7
 	github.com/rs/zerolog v1.30.0
 	modernc.org/sqlite v1.25.0
 )

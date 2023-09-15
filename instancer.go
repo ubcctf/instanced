@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
 	"os"
+	"text/template"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
@@ -15,12 +18,13 @@ import (
 )
 
 type Instancer struct {
-	k8sConfig     *rest.Config
-	config        *Config
-	echo          *echo.Echo
-	challengeObjs map[string][]unstructured.Unstructured
-	db            *sql.DB
-	log           zerolog.Logger
+	k8sConfig *rest.Config
+	config    *Config
+	echo      *echo.Echo
+	// challengeObjs map[string][]unstructured.Unstructured
+	challengeTmpls map[string]*template.Template
+	db             *sql.DB
+	log            zerolog.Logger
 }
 
 func InitInstancer() (*Instancer, error) {
@@ -43,14 +47,24 @@ func InitInstancer() (*Instancer, error) {
 	log.Info().Int("count", len(in.config.Challenges)).Msg("read challenges from config")
 	log.Debug().Str("value", in.config.ListenAddr).Msg("read listenAddr from config")
 
-	in.challengeObjs, err = UnmarshalChallenges(in.config.Challenges)
-	if err != nil {
-		log.Fatal().Err(err).Msg("could not parse challenge manifests")
+	/* 	in.challengeObjs, err = UnmarshalChallenges(in.config.Challenges)
+	   	if err != nil {
+	   		log.Fatal().Err(err).Msg("could not parse challenge manifests")
+	   	}
+	   	for k := range in.challengeObjs {
+	   		log.Info().Str("challenge", k).Msg("parsed challenge manifest")
+	   	}
+	   	log.Info().Int("count", len(in.challengeObjs)).Msg("parsed challenges") */
+	// Parse templates
+	in.challengeTmpls = make(map[string]*template.Template, len(in.config.Challenges))
+	for k, v := range in.config.Challenges {
+		tmpl, err := template.New("challenge").Parse(v)
+		if err != nil {
+			log.Error().Err(err).Str("challenge", k).Msg("could not parse a challenge template")
+			continue
+		}
+		in.challengeTmpls[k] = tmpl
 	}
-	for k := range in.challengeObjs {
-		log.Info().Str("challenge", k).Msg("parsed challenge manifest")
-	}
-	log.Info().Int("count", len(in.challengeObjs)).Msg("parsed challenges")
 
 	in.k8sConfig, err = rest.InClusterConfig()
 	if err != nil {
@@ -105,20 +119,25 @@ func (in *Instancer) DestoryExpiredInstances() {
 
 func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
 	log := in.log.With().Str("component", "instanced").Logger()
-	chal, ok := in.challengeObjs[rec.Challenge]
-	if !ok {
-		return &ChallengeNotFoundError{rec.Challenge}
+	/* 	chal, ok := in.challengeObjs[rec.Challenge]
+	   	if !ok {
+	   		return &ChallengeNotFoundError{rec.Challenge}
+	   	} */
+	chal, err := in.GetChalObjsFromTemplate(rec.Challenge, rec.UUID)
+	if err != nil {
+		return err
 	}
+
 	for _, o := range chal {
 		obj := o.DeepCopy()
 		// todo: set proper name
-		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.Id))
+		//obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.Id))
 		err := in.DeleteObject(obj, "challenges")
 		if err != nil {
 			log.Warn().Err(err).Str("name", obj.GetName()).Str("kind", obj.GetKind()).Msg("error deleting object")
 		}
 	}
-	err := in.DeleteInstanceRecord(rec.Id)
+	err = in.DeleteInstanceRecord(rec.Id)
 	if err != nil {
 		log.Warn().Err(err).Msg("error deleting instance record")
 	}
@@ -128,12 +147,15 @@ func (in *Instancer) DestroyInstance(rec InstanceRecord) error {
 func (in *Instancer) CreateInstance(challenge, team string) (InstanceRecord, error) {
 	log := in.log.With().Str("component", "instanced").Logger()
 
-	chal, ok := in.challengeObjs[challenge]
+	/* chal, ok := in.challengeObjs[challenge]
 	if !ok {
 		return InstanceRecord{}, &ChallengeNotFoundError{challenge}
+	} */
+	cuuid := uuid.NewString()[0:8]
+	chal, err := in.GetChalObjsFromTemplate(challenge, cuuid)
+	if err != nil {
+		return InstanceRecord{}, err
 	}
-
-	var err error
 
 	ttl, err := time.ParseDuration(in.config.InstanceTTL)
 	if err != nil {
@@ -141,7 +163,7 @@ func (in *Instancer) CreateInstance(challenge, team string) (InstanceRecord, err
 		ttl = 10 * time.Minute
 	}
 
-	rec, err := in.InsertInstanceRecord(ttl, team, challenge)
+	rec, err := in.InsertInstanceRecord(ttl, team, challenge, cuuid)
 	if err != nil {
 		log.Error().Err(err).Msg("could not create instance record")
 	} else {
@@ -151,18 +173,21 @@ func (in *Instancer) CreateInstance(challenge, team string) (InstanceRecord, err
 			Msg("registered new instance")
 	}
 
+	var createErr error
 	log.Info().Int("count", len(chal)).Msg("creating objects")
 	for _, o := range chal {
 		obj := o.DeepCopy()
-		obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.Id))
-		resObj, err := in.CreateObject(obj, "challenges")
+		//obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.Id))
+		var resObj *unstructured.Unstructured
+		resObj, createErr = in.CreateObject(obj, "challenges")
 		log.Debug().Any("object", resObj).Msg("created object")
-		if err != nil {
+		if createErr != nil {
+			log.Error().Err(createErr).Msg("error creating object")
 			break
 		}
 		log.Info().Str("kind", resObj.GetKind()).Str("name", resObj.GetName()).Msg("created object")
 	}
-	if err != nil {
+	if createErr != nil {
 		// todo: handle errors/cleanup incomplete deploys?
 		log.Error().Err(err).Msg("could not create an object")
 		log.Info().Msg("instance creation incomplete, manual intervention required")
@@ -176,7 +201,8 @@ func (in *Instancer) GetTeamChallengeStates(teamID string) ([]InstanceRecord, er
 	if err != nil {
 		return nil, err
 	}
-	for k := range in.challengeObjs {
+	//for k := range in.challengeObjs {
+	for k := range in.config.Challenges {
 		active := false
 		for _, v := range instances {
 			if v.Challenge == k {
@@ -189,6 +215,36 @@ func (in *Instancer) GetTeamChallengeStates(teamID string) ([]InstanceRecord, er
 		}
 	}
 	return instances, nil
+}
+
+type ChalInstIdentifier struct {
+	ID string
+}
+
+func (in *Instancer) GetChalObjsFromTemplate(chalName string, cuuid string) ([]unstructured.Unstructured, error) {
+	tmpl, ok := in.challengeTmpls[chalName]
+	if !ok {
+		return nil, &ChallengeNotFoundError{chalName}
+	}
+	var objstr bytes.Buffer
+	tmpl.Execute(&objstr, ChalInstIdentifier{ID: cuuid})
+	chal, err := UnmarshalManifestFile(objstr.String())
+	if err != nil {
+		return nil, fmt.Errorf("could not parse challenge: %q : %w", chalName, err)
+	}
+	return chal, nil
+}
+
+func (in *Instancer) ParseTemplates() {
+	in.challengeTmpls = make(map[string]*template.Template, len(in.config.Challenges))
+	for k, v := range in.config.Challenges {
+		tmpl, err := template.New("challenge").Parse(v)
+		if err != nil {
+			in.log.Error().Err(err).Str("challenge", k).Msg("could not parse a challenge template")
+			continue
+		}
+		in.challengeTmpls[k] = tmpl
+	}
 }
 
 func (in *Instancer) Start() error {

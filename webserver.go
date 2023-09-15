@@ -58,7 +58,7 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, "invalid id")
 	}
 
-	err = in.DestroyInstance(InstanceRecord{instanceID, time.Now(), chalName, ""})
+	err = in.DestroyInstance(InstanceRecord{instanceID, time.Now(), chalName, "", ""})
 
 	if _, ok := err.(*ChallengeNotFoundError); ok {
 		return c.JSON(http.StatusNotFound, "challenge not supported")

@@ -14,6 +14,7 @@ type InstanceRecord struct {
 	Expiry    time.Time `json:"expiry"`
 	Challenge string    `json:"challenge"`
 	TeamID    string    `json:"team"`
+	UUID      string    `json:"uuid"`
 }
 
 func (in *Instancer) InitDB(file string) error {
@@ -22,7 +23,7 @@ func (in *Instancer) InitDB(file string) error {
 		return err
 	}
 	in.db = db
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS instances(id INTEGER PRIMARY KEY, challenge TEXT, team TEXT, expiry INTEGER);")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS instances(id INTEGER PRIMARY KEY, challenge TEXT, team TEXT, expiry INTEGER, uuid TEXT);")
 	if err != nil {
 		return err
 	}
@@ -39,19 +40,19 @@ func (in *Instancer) InitDB(file string) error {
 	return nil
 }
 
-func (in *Instancer) InsertInstanceRecord(ttl time.Duration, team string, challenge string) (InstanceRecord, error) {
+func (in *Instancer) InsertInstanceRecord(ttl time.Duration, team string, challenge string, cuuid string) (InstanceRecord, error) {
 	if in.db == nil {
 		return InstanceRecord{}, errors.New("db not initialized")
 	}
 	expiry := time.Now().Add(ttl)
 
-	stmt, err := in.db.Prepare("INSERT INTO instances(challenge, team, expiry) values(?, ?, ?)")
+	stmt, err := in.db.Prepare("INSERT INTO instances(challenge, team, expiry, uuid) values(?, ?, ?, ?)")
 	if err != nil {
 		return InstanceRecord{}, err
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(challenge, team, expiry.Unix())
+	res, err := stmt.Exec(challenge, team, expiry.Unix(), cuuid)
 	if err != nil {
 		return InstanceRecord{}, err
 	}
@@ -65,6 +66,7 @@ func (in *Instancer) InsertInstanceRecord(ttl time.Duration, team string, challe
 		Id:        id,
 		Expiry:    expiry,
 		Challenge: challenge,
+		UUID:      cuuid,
 	}, nil
 }
 
