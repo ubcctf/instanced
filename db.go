@@ -92,7 +92,7 @@ func (in *Instancer) ReadInstanceRecords() ([]InstanceRecord, error) {
 	if in.db == nil {
 		return nil, errors.New("db not initialized")
 	}
-	rows, err := in.db.Query("SELECT id, challenge, team, expiry FROM instances")
+	rows, err := in.db.Query("SELECT id, challenge, team, expiry, uuid FROM instances")
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (in *Instancer) ReadInstanceRecords() ([]InstanceRecord, error) {
 	for rows.Next() {
 		record := InstanceRecord{}
 		var t int64
-		err = rows.Scan(&record.Id, &record.Challenge, &record.TeamID, &t)
+		err = rows.Scan(&record.Id, &record.Challenge, &record.TeamID, &t, &record.UUID)
 		if err != nil {
 			return records, err
 		}
@@ -116,7 +116,7 @@ func (in *Instancer) ReadInstanceRecordsTeam(teamID string) ([]InstanceRecord, e
 	if in.db == nil {
 		return nil, errors.New("db not initialized")
 	}
-	stmt, err := in.db.Prepare("SELECT id, challenge, team, expiry FROM instances WHERE team = ?")
+	stmt, err := in.db.Prepare("SELECT id, challenge, team, expiry, uuid FROM instances WHERE team = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (in *Instancer) ReadInstanceRecordsTeam(teamID string) ([]InstanceRecord, e
 	for rows.Next() {
 		record := InstanceRecord{}
 		var t int64
-		err = rows.Scan(&record.Id, &record.Challenge, &record.TeamID, &t)
+		err = rows.Scan(&record.Id, &record.Challenge, &record.TeamID, &t, &record.UUID)
 		if err != nil {
 			return records, err
 		}
