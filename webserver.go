@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -36,6 +36,17 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 	chalName := c.QueryParam("chal")
 	teamID := c.QueryParam("team")
 
+	recs, err := in.ReadInstanceRecordsTeam(teamID)
+	if err != nil {
+		c.Logger().Errorf("request failed: %v", err)
+		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
+	}
+	for _, r := range recs {
+		if r.Challenge == chalName {
+			return c.JSON(http.StatusTooManyRequests, "instance already exists for this challenge")
+		}
+	}
+
 	rec, err := in.CreateInstance(chalName, teamID)
 	if _, ok := err.(*ChallengeNotFoundError); ok {
 		return c.JSON(http.StatusNotFound, "challenge not supported")
@@ -47,7 +58,7 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
 	}
 	c.Logger().Info("processed request to provision new instance")
-	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id, "TODO"})
+	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id, fmt.Sprintf("http://%v.%v.ctf.maplebacon.org", rec.UUID, chalName)})
 }
 
 func (in *Instancer) handleInstanceDelete(c echo.Context) error {
@@ -58,7 +69,15 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, "invalid id")
 	}
 
-	err = in.DestroyInstance(InstanceRecord{instanceID, time.Now(), chalName, "", ""})
+	// todo: bugged, pls fix
+	rec, err := in.ReadInstanceRecord(instanceID)
+
+	if err != nil {
+		c.Logger().Errorf("request failed: %v", err)
+		return c.JSON(http.StatusNotFound, "instance id not found")
+	}
+
+	err = in.DestroyInstance(rec)
 
 	if _, ok := err.(*ChallengeNotFoundError); ok {
 		return c.JSON(http.StatusNotFound, "challenge not supported")

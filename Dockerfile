@@ -4,11 +4,12 @@
 FROM golang:alpine AS builder
 RUN apk update && apk add --no-cache git
 WORKDIR /app
-COPY ./* ./
+COPY go.mod go.sum ./
 # Fetch dependencies.
-RUN go get -d -v
+RUN go mod download
+COPY ./* ./
 # Build the binary.
-RUN GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/app
+RUN go get -v && GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/app
 ############################
 # STEP 2 build image
 ############################

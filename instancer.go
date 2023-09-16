@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -36,6 +37,20 @@ func InitInstancer() (*Instancer, error) {
 	in.log = zlog.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(zerolog.DebugLevel)
 	in.echo.Logger = NewEchoLog(in.log)
 	log := in.log.With().Str("component", "instanced-init").Logger()
+
+	reqLog := log.With().Str("component", "echo-req").Logger()
+	in.echo.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogURI:    true,
+		LogStatus: true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			reqLog.Info().
+				Str("URI", v.URI).
+				Int("status", v.Status).
+				Msg("request")
+
+			return nil
+		},
+	}))
 
 	in.registerEndpoints()
 

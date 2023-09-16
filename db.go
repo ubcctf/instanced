@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -15,6 +17,18 @@ type InstanceRecord struct {
 	Challenge string    `json:"challenge"`
 	TeamID    string    `json:"team"`
 	UUID      string    `json:"uuid"`
+	Url       string    `json:"url"`
+}
+
+func (r *InstanceRecord) MarshalJSON() ([]byte, error) {
+	type Alias InstanceRecord
+	return json.Marshal(&struct {
+		*Alias
+		Expiry int64 `json:"stamp"`
+	}{
+		Alias:  (*Alias)(r),
+		Expiry: r.Expiry.Unix(),
+	})
 }
 
 func (in *Instancer) InitDB(file string) error {
@@ -88,6 +102,33 @@ func (in *Instancer) DeleteInstanceRecord(id int64) error {
 	return nil
 }
 
+func (in *Instancer) ReadInstanceRecord(id int64) (InstanceRecord, error) {
+	if in.db == nil {
+		return InstanceRecord{}, errors.New("db not initialized")
+	}
+	rows, err := in.db.Query("SELECT id, challenge, team, expiry, uuid FROM instances WHERE id = ?")
+	if err != nil {
+		return InstanceRecord{}, err
+	}
+	defer rows.Close()
+	records := make([]InstanceRecord, 0)
+	for rows.Next() {
+		record := InstanceRecord{}
+		var t int64
+		err = rows.Scan(&record.Id, &record.Challenge, &record.TeamID, &t, &record.UUID)
+		if err != nil {
+			return InstanceRecord{}, err
+		}
+		record.Expiry = time.Unix(t, 0)
+		records = append(records, record)
+	}
+	if len(records) != 1 {
+		return InstanceRecord{}, fmt.Errorf("unique record not found with id %v", id)
+	}
+	err = rows.Err()
+	return records[0], err
+}
+
 func (in *Instancer) ReadInstanceRecords() ([]InstanceRecord, error) {
 	if in.db == nil {
 		return nil, errors.New("db not initialized")
@@ -136,6 +177,7 @@ func (in *Instancer) ReadInstanceRecordsTeam(teamID string) ([]InstanceRecord, e
 			return records, err
 		}
 		record.Expiry = time.Unix(t, 0)
+		record.Url = fmt.Sprintf("http://%v.%v.ctf.maplebacon.org", record.UUID, record.Challenge)
 		records = append(records, record)
 	}
 	err = rows.Err()
