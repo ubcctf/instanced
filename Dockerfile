@@ -7,7 +7,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 # Fetch dependencies.
 RUN go mod download
-COPY ./* ./
+COPY ./src/* ./
 # Build the binary.
 RUN go get -v && GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/app
 ############################
