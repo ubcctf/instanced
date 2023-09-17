@@ -43,6 +43,10 @@ func InitInstancer() (*Instancer, error) {
 		LogURI:    true,
 		LogStatus: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			// Ignore healthcheck endpoint to prevent spam.
+			if c.Path() == "/healthz" {
+				return nil
+			}
 			reqLog.Info().
 				Str("URI", v.URI).
 				Int("status", v.Status).
