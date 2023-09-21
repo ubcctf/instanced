@@ -10,6 +10,23 @@ Challenge templates are added in the form of CRDs or config. Example format is i
 
 Instances created are kept track of in a local sqlite database. The instancer periodically scans the database for expired instances and deletes them.
 
+## Instancer CLI tool
+The instancer cli tool has been installed to the bastion.
+```
+maple@bastion:~$ instances
+Instancer Admin CLI
+
+Syntax: instances COMMAND [params]
+Commands:
+  help                                Print this help.
+  list                                list all active instances.
+  chals                               Show available challenges.
+  chals  [CTFD TEAM ID]               Show challenge statuses for a team.
+  create [CTFD TEAM ID] [CHAL KEY]    create a new challenge instance.
+  delete [INSTANCE ID]                delete an instance.
+  purge                               purge all instances.
+```
+
 
 
 ## API
