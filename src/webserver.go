@@ -62,10 +62,9 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 }
 
 func (in *Instancer) handleInstanceDelete(c echo.Context) error {
-	if !c.QueryParams().Has("chal") {
+	if !c.QueryParams().Has("id") {
 		return in.handleInstancePurge(c)
 	}
-	chalName := c.QueryParam("chal")
 	instanceID, err := strconv.ParseInt(c.QueryParam("id"), 10, 64)
 
 	if err != nil {
@@ -92,7 +91,7 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 	}
 	c.Logger().Info("processed request to destroy an instance")
 
-	return c.JSON(http.StatusAccepted, InstancesResponse{"destroyed", chalName, instanceID, "TODO"})
+	return c.JSON(http.StatusAccepted, InstancesResponse{"destroyed", rec.Challenge, instanceID, "TODO"})
 }
 
 func (in *Instancer) handleInstancePurge(c echo.Context) error {
