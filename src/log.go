@@ -26,6 +26,7 @@ func (l EchoLog) Output() io.Writer {
 
 func (l EchoLog) SetOutput(w io.Writer) {
 	// Not Implemented
+	l.log.Warn().Str("component", "logger").Msg("attempted to set output of echo logger")
 }
 
 func (l EchoLog) Prefix() string {
@@ -34,6 +35,7 @@ func (l EchoLog) Prefix() string {
 
 func (l EchoLog) SetPrefix(p string) {
 	// Not Implemented
+	l.log.Warn().Str("component", "logger").Msg("attempted to set prefix of echo logger")
 }
 
 func (l EchoLog) Level() log.Lvl {
@@ -42,10 +44,11 @@ func (l EchoLog) Level() log.Lvl {
 
 func (l EchoLog) SetLevel(v log.Lvl) {
 	// Not Implemented
+	l.log.Warn().Str("component", "logger").Msg("attempted to set level of echo logger")
 }
 
 func (l EchoLog) SetHeader(h string) {
-	// Not Implemented
+	l.log.Warn().Str("component", "logger").Msg("attempted to set header of echo logger")
 }
 
 func (l EchoLog) Print(i ...interface{}) {

@@ -106,7 +106,7 @@ func (in *Instancer) ReadInstanceRecord(id int64) (InstanceRecord, error) {
 	if in.db == nil {
 		return InstanceRecord{}, errors.New("db not initialized")
 	}
-	rows, err := in.db.Query("SELECT id, challenge, team, expiry, uuid FROM instances WHERE id = ?")
+	rows, err := in.db.Query("SELECT id, challenge, team, expiry, uuid FROM instances WHERE id = ?", id)
 	if err != nil {
 		return InstanceRecord{}, err
 	}

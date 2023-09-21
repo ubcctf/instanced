@@ -1,0 +1,66 @@
+#!/bin/sh
+
+ListAvail()
+{
+    kubectl exec -n instanced instanced-0 -c client -- curl -s "http://localhost:8080/challenges"
+}
+
+Listall()
+{
+    kubectl exec -n instanced instanced-0 -c client -- curl -s "http://localhost:8080/instances"
+}
+
+Listteam()
+{
+    kubectl exec -n instanced instanced-0 -c client -- curl -s "http://localhost:8080/challenges?team=$1"
+}
+    
+Create()
+{
+    kubectl exec -n instanced instanced-0 -c client -- curl -s -X "POST" "http://localhost:8080/instances?team=$1&chal=$2"
+}
+
+Delete()
+{   
+    kubectl exec -n instanced instanced-0 -c client -- curl -s -X "DELETE" "http://localhost:8080/instances?id=$1"
+}
+
+Deleteall()
+{
+    kubectl exec -n instanced instanced-0 -c client -- curl -s -X "DELETE" "http://localhost:8080/instances"
+}
+
+Help()
+{
+    echo "Instancer Admin CLI"
+    echo
+    echo "Syntax: instances COMMAND [params]"
+    echo "Commands:"
+    echo "  help                                Print this help."
+    echo "  list                                list all active instances."
+    echo "  chals                               Show available challenges."
+    echo "  chals  [CTFD TEAM ID]               Show challenge statuses for a team."
+    echo "  create [CTFD TEAM ID] [CHAL KEY]    create a new challenge instance."
+    echo "  delete [INSTANCE ID]                delete an instance."
+    echo "  purge                               purge all instances."
+    echo
+}
+
+case "$1" in
+    list)
+        Listall
+        exit;;
+    chals)
+        Listteam "$2"
+        exit;;
+    create)
+        Create "$2" "$3"
+        exit;;
+    delete)
+        Delete "$2"
+        exit;;
+    purge)
+        Deleteall
+        exit;;
+esac
+Help

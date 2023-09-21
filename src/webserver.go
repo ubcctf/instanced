@@ -62,6 +62,9 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 }
 
 func (in *Instancer) handleInstanceDelete(c echo.Context) error {
+	if !c.QueryParams().Has("chal") {
+		return in.handleInstancePurge(c)
+	}
 	chalName := c.QueryParam("chal")
 	instanceID, err := strconv.ParseInt(c.QueryParam("id"), 10, 64)
 
@@ -69,7 +72,6 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, "invalid id")
 	}
 
-	// todo: bugged, pls fix
 	rec, err := in.ReadInstanceRecord(instanceID)
 
 	if err != nil {
@@ -91,6 +93,24 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 	c.Logger().Info("processed request to destroy an instance")
 
 	return c.JSON(http.StatusAccepted, InstancesResponse{"destroyed", chalName, instanceID, "TODO"})
+}
+
+func (in *Instancer) handleInstancePurge(c echo.Context) error {
+	recs, err := in.ReadInstanceRecords()
+	if err != nil {
+		c.Logger().Errorf("request failed: %v", err)
+		return c.JSON(http.StatusNotFound, "instance id not found")
+	}
+	go func() {
+		for _, r := range recs {
+			err = in.DestroyInstance(r)
+			if err != nil {
+				c.Logger().Error("an instance failed to purge")
+			}
+		}
+	}()
+
+	return c.JSON(http.StatusAccepted, "instance purge started")
 }
 
 func (in *Instancer) handleInstanceList(c echo.Context) error {
