@@ -63,7 +63,7 @@ func InitInstancer() (*Instancer, error) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("could not load config")
 	}
-	log.Info().Int("count", len(in.config.Challenges)).Msg("read challenges from config")
+	//log.Info().Int("count", len(in.config.Challenges)).Msg("read challenges from config")
 	log.Debug().Str("value", in.config.ListenAddr).Msg("read listenAddr from config")
 
 	/* 	in.challengeObjs, err = UnmarshalChallenges(in.config.Challenges)
@@ -75,36 +75,22 @@ func InitInstancer() (*Instancer, error) {
 	   	}
 	   	log.Info().Int("count", len(in.challengeObjs)).Msg("parsed challenges") */
 	// Parse templates
-	in.challengeTmpls = make(map[string]*template.Template, len(in.config.Challenges))
-	for k, v := range in.config.Challenges {
-		tmpl, err := template.New("challenge").Parse(v)
-		if err != nil {
-			log.Error().Err(err).Str("challenge", k).Msg("could not parse a challenge template")
-			continue
-		}
-		in.challengeTmpls[k] = tmpl
-	}
-
+	/* 	in.challengeTmpls = make(map[string]*template.Template, len(in.config.Challenges))
+	   	for k, v := range in.config.Challenges {
+	   		tmpl, err := template.New("challenge").Parse(v)
+	   		if err != nil {
+	   			log.Error().Err(err).Str("challenge", k).Msg("could not parse a challenge template")
+	   			continue
+	   		}
+	   		in.challengeTmpls[k] = tmpl
+	   	} */
 	in.k8sConfig, err = rest.InClusterConfig()
 	if err != nil {
 		log.Fatal().Err(err).Msg("could not create kube-api client config")
 	}
 	rest.SetKubernetesDefaults(in.k8sConfig)
 	log.Debug().Str("config", fmt.Sprintf("%+v", in.k8sConfig)).Msg("loaded kube-api client config")
-
-	// Test CRDs
-	log.Debug().Msg("querying CRDs")
-	crdChallObjs, err := in.QueryInstancedChallenges("challenges")
-	if err != nil {
-		log.Debug().Err(err).Msg("error retrieving challenge definitions from CRDs")
-	} else {
-		for k, o := range crdChallObjs {
-			log.Debug().Str("challenge", k).Msg("parsed challenge from CRD")
-			for _, v := range o {
-				log.Debug().Str("kind", v.GetKind()).Str("name", v.GetName()).Str("challenge", k).Msg("parsed resource")
-			}
-		}
-	}
+	in.LoadCRDs()
 
 	err = in.InitDB("/data/instancer.db")
 	if err != nil {
@@ -113,6 +99,21 @@ func InitInstancer() (*Instancer, error) {
 	log.Info().Msg("initialized database")
 
 	return &in, nil
+}
+
+func (in *Instancer) LoadCRDs() {
+	log := in.log
+	// Test CRDs
+	log.Debug().Msg("querying CRDs")
+	crdChallObjs, err := in.QueryInstancedChallenges("challenges")
+	if err != nil {
+		log.Debug().Err(err).Msg("error retrieving challenge definitions from CRDs")
+	}
+	for k := range crdChallObjs {
+		log.Info().Str("challenge", k).Msg("parsed challenge template")
+	}
+	log.Info().Int("count", len(crdChallObjs)).Msg("parsed challenges")
+	in.challengeTmpls = crdChallObjs
 }
 
 func (in *Instancer) DestoryExpiredInstances() {

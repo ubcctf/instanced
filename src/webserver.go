@@ -58,7 +58,7 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
 	}
 	c.Logger().Info("processed request to provision new instance")
-	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id, fmt.Sprintf("http://%v.%v.ctf.maplebacon.org", rec.UUID, chalName)})
+	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id, fmt.Sprintf("https://%v.%v.ctf.maplebacon.org", rec.UUID, chalName)})
 }
 
 func (in *Instancer) handleInstanceDelete(c echo.Context) error {

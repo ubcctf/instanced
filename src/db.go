@@ -22,13 +22,17 @@ type InstanceRecord struct {
 
 func (r *InstanceRecord) MarshalJSON() ([]byte, error) {
 	type Alias InstanceRecord
-	return json.Marshal(&struct {
+	data := &struct {
 		*Alias
-		Expiry int64 `json:"stamp"`
+		Expiry string `json:"expiry"`
 	}{
 		Alias:  (*Alias)(r),
-		Expiry: r.Expiry.Unix(),
-	})
+		Expiry: r.Expiry.Format(time.TimeOnly) + " UTC",
+	}
+	if r.Expiry.Before(time.Now()) {
+		data.Expiry = "Expired"
+	}
+	return json.Marshal(data)
 }
 
 func (in *Instancer) InitDB(file string) error {

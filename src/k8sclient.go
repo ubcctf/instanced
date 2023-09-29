@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"text/template"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -150,7 +151,7 @@ func (in *Instancer) GetObjectResource(unstructObj *unstructured.Unstructured) (
 	return mapping.Resource, nil
 }
 
-func (in *Instancer) QueryInstancedChallenges(namespace string) (map[string][]unstructured.Unstructured, error) {
+func (in *Instancer) QueryInstancedChallenges(namespace string) (map[string]*template.Template, error) {
 	resource := schema.GroupVersionResource{
 		Group:    "k8s.maplebacon.org",
 		Version:  "unstable",
@@ -167,25 +168,21 @@ func (in *Instancer) QueryInstancedChallenges(namespace string) (map[string][]un
 		return nil, err
 	}
 
-	ret := make(map[string][]unstructured.Unstructured)
+	ret := make(map[string]*template.Template)
 
 	for _, c := range chalList.Items {
-		resources, found, err := unstructured.NestedSlice(c.Object, "spec", "resources")
+		tmplStr, found, err := unstructured.NestedString(c.Object, "spec", "challengeTemplate")
 		if err != nil || !found {
-			fmt.Printf("resources not found for challenge crd %v: error=%v", c.GetName(), err)
+			fmt.Printf("template not found for challenge crd %v: error=%v", c.GetName(), err)
 			continue
 		}
 
-		res := make([]unstructured.Unstructured, 0)
-
-		for _, r := range resources {
-			obj, ok := r.(map[string]interface{})
-			if !ok {
-				fmt.Printf("could not parse object")
-			}
-			res = append(res, unstructured.Unstructured{Object: obj})
+		tmpl, err := template.New("challenge").Parse(tmplStr)
+		if err != nil {
+			in.log.Error().Err(err).Str("challenge", c.GetName()).Msg("could not parse a challenge template")
+			continue
 		}
-		ret[c.GetName()] = res
+		ret[c.GetName()] = tmpl
 	}
 	return ret, nil
 }

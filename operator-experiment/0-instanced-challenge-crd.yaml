@@ -16,12 +16,8 @@ spec:
             spec:
               type: object
               properties:
-                resources:
-                  type: array
-                  items:
-                    type: object
-                    x-kubernetes-embedded-resource: true
-                    x-kubernetes-preserve-unknown-fields: true
+                challengeTemplate:
+                  type: string
   scope: Namespaced
   names:
     plural: instancedchallenges
