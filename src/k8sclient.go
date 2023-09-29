@@ -171,6 +171,11 @@ func (in *Instancer) QueryInstancedChallenges(namespace string) (map[string]*tem
 	ret := make(map[string]*template.Template)
 
 	for _, c := range chalList.Items {
+		hidden, found, err := unstructured.NestedBool(c.Object, "spec", "hidden")
+		if err != nil || found && hidden {
+			in.log.Info().Err(err).Str("challenge", c.GetName()).Msg("skipping hidden challenge")
+			continue
+		}
 		tmplStr, found, err := unstructured.NestedString(c.Object, "spec", "challengeTemplate")
 		if err != nil || !found {
 			fmt.Printf("template not found for challenge crd %v: error=%v", c.GetName(), err)

@@ -19,6 +19,8 @@ func (in *Instancer) registerEndpoints() {
 	in.echo.DELETE("/instances", in.handleInstanceDelete)
 
 	in.echo.GET("/challenges", in.handleInstanceListTeam)
+
+	in.echo.POST("/reload", in.handleCRDReload)
 }
 
 type InstancesResponse struct {
@@ -132,4 +134,9 @@ func (in *Instancer) handleInstanceListTeam(c echo.Context) error {
 	}
 	// todo: properly marshal records
 	return c.JSON(http.StatusOK, records)
+}
+
+func (in *Instancer) handleCRDReload(c echo.Context) error {
+	go in.LoadCRDs()
+	return c.JSON(http.StatusAccepted, "accepted")
 }

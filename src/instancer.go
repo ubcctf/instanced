@@ -105,15 +105,15 @@ func (in *Instancer) LoadCRDs() {
 	log := in.log
 	// Test CRDs
 	log.Debug().Msg("querying CRDs")
-	crdChallObjs, err := in.QueryInstancedChallenges("challenges")
+	var err error
+	in.challengeTmpls, err = in.QueryInstancedChallenges("challenges")
 	if err != nil {
 		log.Debug().Err(err).Msg("error retrieving challenge definitions from CRDs")
 	}
-	for k := range crdChallObjs {
+	for k := range in.challengeTmpls {
 		log.Info().Str("challenge", k).Msg("parsed challenge template")
 	}
-	log.Info().Int("count", len(crdChallObjs)).Msg("parsed challenges")
-	in.challengeTmpls = crdChallObjs
+	log.Info().Int("count", len(in.challengeTmpls)).Msg("parsed challenges")
 }
 
 func (in *Instancer) DestoryExpiredInstances() {
@@ -222,7 +222,7 @@ func (in *Instancer) GetTeamChallengeStates(teamID string) ([]InstanceRecord, er
 		return nil, err
 	}
 	//for k := range in.challengeObjs {
-	for k := range in.config.Challenges {
+	for k := range in.challengeTmpls {
 		active := false
 		for _, v := range instances {
 			if v.Challenge == k {
