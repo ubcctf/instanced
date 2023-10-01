@@ -144,9 +144,9 @@ spec:
 func ExampleGetChalObjsFromTemplate() {
 	log.Println("Running: ExampleGetChalObjsFromTemplate")
 	in := Instancer{}
-	in.config = &Config{}
-	in.config.Challenges = make(map[string]string, 2)
-	in.config.Challenges["nginx"] = `---
+	in.conf = &Config{}
+	in.conf.Challenges = make(map[string]string, 2)
+	in.conf.Challenges["nginx"] = `---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

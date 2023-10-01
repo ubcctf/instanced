@@ -1,33 +1,65 @@
-package main
+package instancer
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/rs/zerolog"
+	"github.com/ubcctf/instanced/src/adapters"
 )
-
-// Register web request handlers
-func (in *Instancer) registerEndpoints() {
-	in.echo.GET("/healthz", in.handleLivenessCheck)
-
-	in.echo.GET("/instances", in.handleInstanceList)
-
-	in.echo.POST("/instances", in.handleInstanceCreate)
-
-	in.echo.DELETE("/instances", in.handleInstanceDelete)
-
-	in.echo.GET("/challenges", in.handleInstanceListTeam)
-
-	in.echo.POST("/reload", in.handleCRDReload)
-}
 
 type InstancesResponse struct {
 	Action    string `json:"action"`
 	Challenge string `json:"challenge"`
 	ID        int64  `json:"id"`
 	URL       string `json:"url"`
+}
+
+func initWebServer(log zerolog.Logger, logRequests bool) *echo.Echo {
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+	e.Logger = adapters.NewEchoLog(log)
+
+	// Register request logging middleware
+	if logRequests {
+		reqLog := log.With().Str("component", "echo-req").Logger()
+		e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+			LogURI:    true,
+			LogStatus: true,
+			LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+				// Ignore healthcheck endpoint to prevent spam.
+				if c.Path() == "/healthz" {
+					return nil
+				}
+				reqLog.Info().
+					Str("URI", v.URI).
+					Int("status", v.Status).
+					Msg("request")
+				return nil
+			},
+		}))
+	}
+
+	e.Use(echoprometheus.NewMiddleware("instanced"))
+	e.GET("/metrics", echoprometheus.NewHandler())
+
+	return e
+}
+
+func (in *Instancer) registerRequestHandlers() {
+	// Register requst handlers
+	in.srv.GET("/healthz", in.handleLivenessCheck)
+	in.srv.GET("/instances", in.handleInstanceList)
+	in.srv.POST("/instances", in.handleInstanceCreate)
+	in.srv.DELETE("/instances", in.handleInstanceDelete)
+	in.srv.GET("/challenges", in.handleInstanceListTeam)
+	in.srv.POST("/reload", in.handleCRDReload)
 }
 
 func (in *Instancer) handleLivenessCheck(c echo.Context) error {
@@ -38,7 +70,7 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 	chalName := c.QueryParam("chal")
 	teamID := c.QueryParam("team")
 
-	recs, err := in.ReadInstanceRecordsTeam(teamID)
+	recs, err := in.dbC.ReadInstanceRecordsTeam(teamID)
 	if err != nil {
 		c.Logger().Errorf("request failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
@@ -73,7 +105,7 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, "invalid id")
 	}
 
-	rec, err := in.ReadInstanceRecord(instanceID)
+	rec, err := in.dbC.ReadInstanceRecord(instanceID)
 
 	if err != nil {
 		c.Logger().Errorf("request failed: %v", err)
@@ -97,7 +129,7 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 }
 
 func (in *Instancer) handleInstancePurge(c echo.Context) error {
-	recs, err := in.ReadInstanceRecords()
+	recs, err := in.dbC.ReadInstanceRecords()
 	if err != nil {
 		c.Logger().Errorf("request failed: %v", err)
 		return c.JSON(http.StatusNotFound, "instance id not found")
@@ -116,7 +148,7 @@ func (in *Instancer) handleInstancePurge(c echo.Context) error {
 
 func (in *Instancer) handleInstanceList(c echo.Context) error {
 	// todo: authenticate
-	records, err := in.ReadInstanceRecords()
+	records, err := in.dbC.ReadInstanceRecords()
 	if err != nil {
 		c.Logger().Errorf("request failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, "request failed")
@@ -137,6 +169,6 @@ func (in *Instancer) handleInstanceListTeam(c echo.Context) error {
 }
 
 func (in *Instancer) handleCRDReload(c echo.Context) error {
-	go in.LoadCRDs()
+	go in.LoadCRDs(context.TODO())
 	return c.JSON(http.StatusAccepted, "accepted")
 }

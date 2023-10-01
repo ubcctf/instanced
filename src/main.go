@@ -1,12 +1,10 @@
 package main
 
-import "log"
+import (
+	"github.com/ubcctf/instanced/src/instancer"
+)
 
 func main() {
-	instancer, err := InitInstancer()
-	if err != nil {
-		log.Fatal("failed to initialize")
-	}
-
+	instancer := instancer.InitInstancer()
 	instancer.Start()
 }
