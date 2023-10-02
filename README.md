@@ -1,10 +1,8 @@
 # ubcctf/instanced
 
-currently Jank As Hell.
-
 Manages challenge instances on-demand.
 
-`instanced` runs in the cluster and exposes an HTTP API which is used to request instances.
+`instanced` runs in the k8s cluster and exposes an HTTP API which is used to request instances.
 Challenge templates are added in the form of CRDs or config. Example format is in this repository.
 `instanced` must be restarted every time new CRDs are applied.
 
