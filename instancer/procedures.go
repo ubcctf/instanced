@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ubcctf/instanced/src/db"
-	"github.com/ubcctf/instanced/src/k8s"
+	"github.com/ubcctf/instanced/db"
+	"github.com/ubcctf/instanced/k8s"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 

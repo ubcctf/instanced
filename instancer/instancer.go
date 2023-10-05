@@ -10,8 +10,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog"
-	"github.com/ubcctf/instanced/src/db"
-	"github.com/ubcctf/instanced/src/k8s"
+	"github.com/ubcctf/instanced/db"
+	"github.com/ubcctf/instanced/k8s"
 )
 
 type Instancer struct {

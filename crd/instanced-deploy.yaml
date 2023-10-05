@@ -1,0 +1,151 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: instanced
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/component: instanced
+    app.kubernetes.io/name: instanced
+    app.kubernetes.io/part-of: maplectf-instancing
+  name: instanced
+  namespace: instanced
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: challenge-instancer
+  labels:
+    app.kubernetes.io/component: instanced
+    app.kubernetes.io/name: instanced
+    app.kubernetes.io/part-of: maplectf-instancing
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["k8s.maplebacon.org"]
+    resources:
+      - '*'
+    verbs:
+      - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: manage-challenges
+  namespace: challenges
+  labels:
+    app.kubernetes.io/component: instanced
+    app.kubernetes.io/name: instanced
+    app.kubernetes.io/part-of: maplectf-instancing
+subjects:
+  - kind: ServiceAccount
+    name: instanced
+    namespace: instanced
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: challenge-instancer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: instanced-config
+  namespace: instanced
+data:
+  config.yaml: |
+    listenAddr: ":8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: instanced
+  name: instanced
+  namespace: instanced
+spec:
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: instanced
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: instanced
+  namespace: instanced
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: instanced
+  serviceName: instanced
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: instanced
+    spec:
+      serviceAccountName: instanced
+      automountServiceAccountToken: true
+      containers:
+        - image: us.gcr.io/maplectf/instanced:latest
+          name: instanced
+          ports:
+            - name: http-port
+              containerPort: 8080
+              hostPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http-port
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: "/config"
+              readOnly: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "20Mi"
+        - image: alpine/curl:latest
+          name: client
+          command: ["sleep"]
+          args: ["infinity"]
+          resources:
+            requests:
+              cpu: "1m"
+              memory: "2Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: instanced-config
+            items:
+              - key: "config.yaml"
+                path: "config.yaml"
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 200Mi
+        storageClassName: standard-rwo

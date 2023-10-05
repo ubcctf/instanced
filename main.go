@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ubcctf/instanced/src/instancer"
+	"github.com/ubcctf/instanced/instancer"
 )
 
 func main() {
