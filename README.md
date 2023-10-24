@@ -1,4 +1,5 @@
 # ubcctf/instanced
+NOTE: this was written for maplectf 2023, while it is functional, it is not ready for use out of the box.
 
 Manages challenge instances on-demand.
 
