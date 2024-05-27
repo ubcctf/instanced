@@ -9,8 +9,18 @@ Challenge templates are added in the form of CRDs or config. Example format is i
 
 Instances created are kept track of in a local sqlite database. The instancer periodically scans the database for expired instances and deletes them.
 
+## Requirements
+You must be hosting your challenges on kubernetes or a framework like kCTF.
+
+## Setup
+Apply the CRD and manifest in /manifests
+Write a manifest file for a challenge deployment, plus any services, ingresses, etc. and convert it to a Go template.
+Objects created by the instancer will be labeled with `k8s.maplebacon.org/instanced=managed`
+
 ## Instancer CLI tool
-The instancer cli tool has been installed to the bastion.
+The instancer cli tool is a bash script that makes requests the instancer.
+During MapleCTF we put this on a bastion host with cluster access via `kubectl`.
+
 ```
 maple@bastion:~$ instances
 Instancer Admin CLI
@@ -25,7 +35,6 @@ Commands:
   delete [INSTANCE ID]                delete an instance.
   purge                               purge all instances.
 ```
-
 
 
 ## API

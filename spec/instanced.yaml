@@ -1,0 +1,6 @@
+
+instance-expiry: "10m"
+listen-addr: ":8080"
+log-request: false
+db-file: "/data/instancer.db"
+api-token: "verysecrettoken"

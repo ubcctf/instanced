@@ -1,3 +1,5 @@
 role based challenge visibility
 prometheus metrics
 proper timeouts and async ops
+annotate challenge objects with team IDs, expiry, etc.
+get rid of sqlite, just use kube-apiserver for db LOL

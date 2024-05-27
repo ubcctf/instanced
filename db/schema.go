@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/json"
 	"time"
 )
 
@@ -15,7 +14,7 @@ type InstanceRecord struct {
 	Url       string    `json:"url"`
 }
 
-func (r *InstanceRecord) MarshalJSON() ([]byte, error) {
+/* func (r *InstanceRecord) MarshalJSON() ([]byte, error) {
 	type Alias InstanceRecord
 	data := &struct {
 		*Alias
@@ -28,4 +27,4 @@ func (r *InstanceRecord) MarshalJSON() ([]byte, error) {
 		data.Expiry = "Expired"
 	}
 	return json.Marshal(data)
-}
+} */

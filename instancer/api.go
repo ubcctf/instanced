@@ -2,7 +2,6 @@ package instancer
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -12,13 +11,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/ubcctf/instanced/adapters"
 )
-
-type InstancesResponse struct {
-	Action    string `json:"action"`
-	Challenge string `json:"challenge"`
-	ID        int64  `json:"id"`
-	URL       string `json:"url"`
-}
 
 func initWebServer(log zerolog.Logger, logRequests bool) *echo.Echo {
 	e := echo.New()
@@ -70,20 +62,9 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 	chalName := c.QueryParam("chal")
 	teamID := c.QueryParam("team")
 
-	recs, err := in.dbC.ReadInstanceRecordsTeam(teamID)
-	if err != nil {
-		c.Logger().Errorf("request failed: %v", err)
-		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
-	}
-	for _, r := range recs {
-		if r.Challenge == chalName {
-			return c.JSON(http.StatusTooManyRequests, "instance already exists for this challenge")
-		}
-	}
-
 	rec, err := in.CreateInstance(chalName, teamID)
 	if _, ok := err.(*ChallengeNotFoundError); ok {
-		return c.JSON(http.StatusNotFound, "challenge not supported")
+		return c.JSON(http.StatusNotFound, err.Error())
 	}
 
 	if err != nil {
@@ -92,7 +73,7 @@ func (in *Instancer) handleInstanceCreate(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, "challenge deploy failed: contact admin")
 	}
 	c.Logger().Info("processed request to provision new instance")
-	return c.JSON(http.StatusAccepted, InstancesResponse{"created", chalName, rec.Id, fmt.Sprintf("https://%v.%v.ctf.maplebacon.org", rec.UUID, chalName)})
+	return c.JSON(http.StatusAccepted, rec)
 }
 
 func (in *Instancer) handleInstanceDelete(c echo.Context) error {
@@ -125,7 +106,7 @@ func (in *Instancer) handleInstanceDelete(c echo.Context) error {
 	}
 	c.Logger().Info("processed request to destroy an instance")
 
-	return c.JSON(http.StatusAccepted, InstancesResponse{"destroyed", rec.Challenge, instanceID, "TODO"})
+	return c.JSON(http.StatusAccepted, rec)
 }
 
 func (in *Instancer) handleInstancePurge(c echo.Context) error {

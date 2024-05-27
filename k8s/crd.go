@@ -59,6 +59,14 @@ func UnmarshalChallenges(challenges map[string]string) (map[string][]unstructure
 	return res, nil
 }
 
+func LabelObjects(objs []unstructured.Unstructured) {
+	for i := range objs {
+		labels := objs[i].GetLabels()
+		labels["k8s.maplebacon.org/instanced"] = "managed"
+		objs[i].SetLabels(labels)
+	}
+}
+
 func (k *KubeClient) QueryInstancedChallenges(ctx context.Context, namespace string) (map[string]*template.Template, error) {
 	log := zerolog.Ctx(ctx)
 	resource := schema.GroupVersionResource{

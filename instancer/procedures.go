@@ -3,7 +3,6 @@ package instancer
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -76,18 +75,26 @@ func (in *Instancer) DestroyInstance(rec db.InstanceRecord) error {
 	return nil
 }
 
-func (in *Instancer) CreateInstance(challenge, team string) (db.InstanceRecord, error) {
+func (in *Instancer) CreateInstance(challenge, teamID string) (db.InstanceRecord, error) {
 	log := in.log.With().Str("component", "instanced").Logger()
 
-	/* chal, ok := in.challengeObjs[challenge]
-	if !ok {
-		return InstanceRecord{}, &ChallengeNotFoundError{challenge}
-	} */
+	recs, err := in.dbC.ReadInstanceRecordsTeam(teamID)
+	if err != nil {
+		log.Error().Err(err).Caller().Msg("failed database read")
+		return db.InstanceRecord{}, err
+	}
+	for _, r := range recs {
+		if r.Challenge == challenge {
+			return db.InstanceRecord{}, &InstanceExistsError{challenge, teamID}
+		}
+	}
+
 	cuuid := uuid.NewString()[0:8]
 	chal, err := in.GetChalObjsFromTemplate(challenge, cuuid)
 	if err != nil {
 		return db.InstanceRecord{}, err
 	}
+	k8s.LabelObjects(chal)
 
 	ttl, err := time.ParseDuration(in.conf.InstanceTTL)
 	if err != nil {
@@ -95,9 +102,10 @@ func (in *Instancer) CreateInstance(challenge, team string) (db.InstanceRecord, 
 		ttl = 10 * time.Minute
 	}
 
-	rec, err := in.dbC.InsertInstanceRecord(ttl, team, challenge, cuuid)
+	rec, err := in.dbC.InsertInstanceRecord(ttl, teamID, challenge, cuuid)
 	if err != nil {
-		log.Error().Err(err).Msg("could not create instance record")
+		log.Error().Err(err).Caller().Msg("failed database read")
+		return db.InstanceRecord{}, err
 	} else {
 		log.Info().Time("expiry", rec.Expiry).
 			Str("challenge", rec.Challenge).
@@ -108,22 +116,20 @@ func (in *Instancer) CreateInstance(challenge, team string) (db.InstanceRecord, 
 	var createErr error
 	log.Info().Int("count", len(chal)).Msg("creating objects")
 	for _, o := range chal {
-		obj := o.DeepCopy()
-		//obj.SetName(fmt.Sprintf("in-%v-%v", obj.GetName(), rec.Id))
 		var resObj *unstructured.Unstructured
-		resObj, createErr = in.k8sC.CreateObject(obj, "challenges")
-		log.Debug().Any("object", resObj).Msg("created object")
+		resObj, createErr = in.k8sC.CreateObject(&o, "challenges")
+		log.Trace().Any("object", resObj).Msg("created object")
 		if createErr != nil {
 			log.Error().Err(createErr).Msg("error creating object")
 			break
 		}
-		log.Info().Str("kind", resObj.GetKind()).Str("name", resObj.GetName()).Msg("created object")
+		log.Debug().Str("kind", resObj.GetKind()).Str("name", resObj.GetName()).Msg("created object")
 	}
 	if createErr != nil {
 		// todo: handle errors/cleanup incomplete deploys?
 		log.Error().Err(err).Msg("could not create an object")
-		log.Info().Msg("instance creation incomplete, manual intervention required")
-		return db.InstanceRecord{}, errors.New("instance deployment failed")
+		log.Warn().Msg("instance creation incomplete, manual intervention required")
+		return db.InstanceRecord{}, createErr
 	}
 	return rec, nil
 }

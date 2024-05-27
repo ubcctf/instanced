@@ -16,8 +16,13 @@ spec:
             spec:
               type: object
               properties:
+                # Override default expiry time for this challenge
                 expiry:
                   type: string
+                # Golang template that compiles connection instructions
+                connectionStringTemplate:
+                  type: string
+                # Golang template that compiles to a k8s manifest yaml file. Multiple objects separated with --- as standard. 
                 challengeTemplate:
                   type: string
   scope: Namespaced
